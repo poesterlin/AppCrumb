@@ -1,7 +1,7 @@
 # The Hamstr add-on: the appliance image (appliance/), settings from the
 # options below. Bump `version` to a released image tag (git tag vX.Y.Z).
 name: Hamstr
-version: "0.3.5"
+version: "0.3.6"
 slug: hamstr
 description: Little web apps in one click, with your data at home
 url: https://github.com/poesterlin/AppCrumb

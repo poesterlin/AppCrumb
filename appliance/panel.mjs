@@ -4,7 +4,7 @@
 // through Home Assistant's address; Hamstr itself answers on the box's address.
 //   node panel.mjs <out-dir>
 import { mkdirSync, writeFileSync } from "node:fs";
-import { hostname, networkInterfaces } from "node:os";
+import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -15,9 +15,9 @@ if (env.TLS_HOSTNAME && env.HAMSTR_AUTH !== "none") {
 	links.push({ url: `https://${env.TLS_HOSTNAME}${port}/`, note: "Your Hamstr" });
 } else {
 	const port = `:${env.HTTP_PORT}`;
-	// A container id is no name for the network; Home Assistant's default is.
-	const name = /^[0-9a-f]{12,}$/.test(hostname()) ? "homeassistant" : hostname();
-	links.push({ url: `http://${name}.local${port}/`, note: "On your home network" });
+	// Always homeassistant.local — the add-on's hostname is like e1255cb9-hamstr,
+	// which is not a LAN DNS name and must not become *.local.
+	links.push({ url: `http://homeassistant.local${port}/`, note: "On your home network" });
 	for (const a of Object.values(networkInterfaces()).flat()) {
 		if (a.family !== "IPv4" || a.internal) continue;
 		// Docker's and the Supervisor's own bridges are not reachable from outside.
@@ -27,7 +27,10 @@ if (env.TLS_HOSTNAME && env.HAMSTR_AUTH !== "none") {
 	}
 }
 const [first, ...rest] = links;
-const embedUrl = JSON.stringify(first.url);
+// Prefer a LAN IP for the iframe: .local is flaky from some clients, and the
+// add-on hostname must never be used (see above).
+const embed = links.find((l) => l.note === "By IP address") ?? first;
+const embedUrl = JSON.stringify(embed.url);
 const page = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Hamstr</title>
 <style>
@@ -67,14 +70,27 @@ If your browser changes the address to https://, allow http for it.</p>` : ""}
 		fallback.hidden = true;
 		iframe.hidden = false;
 	}
-	iframe.addEventListener("load", embedded);
-	iframe.src = url;
-	// If the frame stays blank (blocked or unreachable), keep the open button.
-	setTimeout(function () {
+	function giveUp() {
 		if (settled) return;
+		settled = true;
 		try { iframe.removeAttribute("src"); } catch (e) {}
 		iframe.hidden = true;
-	}, 4000);
+		fallback.hidden = false;
+		document.body.className = "";
+	}
+	iframe.addEventListener("load", function () {
+		// Cross-origin Hamstr: reading location throws ⇒ real page. about:blank
+		// or a browser error page is often readable ⇒ keep the open button.
+		try {
+			var href = iframe.contentWindow && iframe.contentWindow.location.href;
+			if (!href || href === "about:blank" || href.indexOf("chrome-error://") === 0 || href.indexOf("chromewebdata") !== -1) return;
+			embedded();
+		} catch (e) {
+			embedded();
+		}
+	});
+	iframe.src = url;
+	setTimeout(giveUp, 4000);
 })();
 </script>
 </body></html>
