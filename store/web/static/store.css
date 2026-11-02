@@ -333,6 +333,9 @@ a { color: var(--accent-strong); }
 
 /* --- footer --- */
 .foot {
+	width: min(var(--page), calc(100% - 24px));
+	margin: 0 auto;
+	padding: 24px 14px 40px;
 	border-top: 1px dashed color-mix(in srgb, var(--accent) 30%, var(--line));
 }
 

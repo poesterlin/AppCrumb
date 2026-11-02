@@ -229,8 +229,18 @@ export function createStore(options: StoreOptions = {}) {
 		if (shell !== undefined) return shell;
 		const file = join(webDir, "index.html");
 		if (!existsSync(file)) return (shell = null);
-		const body = readFileSync(file);
-		const hashes = [...body.toString("utf8").matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+		let html = readFileSync(file, "utf8");
+		// The CDN gives static files a long browser TTL, so a deploy that only
+		// changes /store.css would stay stale in visitors' browsers. index.html
+		// is no-cache: version the non-hashed links by their build mtime here.
+		for (const rel of ["/ui.css", "/store.css", "/crumb.svg"]) {
+			const asset = join(webDir, rel);
+			if (!existsSync(asset)) continue;
+			const version = statSync(asset).mtimeMs.toString(36);
+			html = html.replaceAll(`"${rel}"`, `"${rel}?v=${version}"`);
+		}
+		const body = Buffer.from(html);
+		const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 			(m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`,
 		);
 		return (shell = { body, scriptSrc: ["'self'", ...hashes].join(" ") });
