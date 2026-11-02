@@ -33,12 +33,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = join(HERE, "web", "build");
 const scryptAsync = promisify(scrypt) as (password: string | Buffer, salt: Buffer, keylen: number) => Promise<Buffer>;
 
+// Umami on analytics.oesterlin.dev (see store/web/src/app.html).
+const ANALYTICS = "https://analytics.oesterlin.dev";
 const SECURITY_HEADERS = {
 	"x-content-type-options": "nosniff",
 	"referrer-policy": "no-referrer",
 	"x-frame-options": "DENY",
 	"content-security-policy":
-		"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+		`default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' ${ANALYTICS}; connect-src 'self' ${ANALYTICS}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
 };
 
 const MIME = {
@@ -247,11 +249,11 @@ export function createStore(options: StoreOptions = {}) {
 		const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 			(m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`,
 		);
-		return (shell = { body, scriptSrc: ["'self'", ...hashes].join(" ") });
+		return (shell = { body, scriptSrc: ["'self'", ANALYTICS, ...hashes].join(" ") });
 	};
-	const security = (scriptSrc = "'self'") => ({
+	const security = (scriptSrc = `'self' ${ANALYTICS}`) => ({
 		...SECURITY_HEADERS,
-		"content-security-policy": `default-src 'self'; img-src 'self' data:; style-src 'self'; script-src ${scriptSrc}; connect-src 'self'; font-src 'self'; frame-src ${frameSrc}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+		"content-security-policy": `default-src 'self'; img-src 'self' data:; style-src 'self'; script-src ${scriptSrc}; connect-src 'self' ${ANALYTICS}; font-src 'self'; frame-src ${frameSrc}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
 	});
 
 	const blobsDir = join(config.dataDir, "blobs");

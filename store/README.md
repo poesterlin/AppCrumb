@@ -485,8 +485,9 @@ labels, internal suffixes or numeric TLDs.
   a registration/publishing switch, quotas, rate limits, a content policy every
   publisher accepts (`/policy`). A public store still needs a human on the
   other end; the code provides the levers (§5).
-- **Privacy**: no email, no tracking pixels, no third-party scripts. Download
-  counts are aggregate. Object names inside apps are not sent to the store.
+- **Privacy**: no email, no ad pixels. The public site loads a self-hosted Umami
+  script (`analytics.oesterlin.dev`) for aggregate page views. Download counts
+  are aggregate. Object names inside apps are not sent to the store.
 
 Accepted for the prototype: one shared moderator password (names are typed at
 sign-in and logged, not verified); in-memory rate limits; no password reset;
