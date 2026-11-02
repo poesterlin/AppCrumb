@@ -7,6 +7,7 @@ run on a personal [Hamstr](../hamstr/README.md) (or any
 [celld-sites](../README.md) node). A publisher ships one packed bundle; an
 admin presses **Get** in their Hamstr, or a developer runs one command. The
 store never runs app code, and the app's data never leaves the user's machine.
+Hamstr install and usage: the [manual](https://docs.appcrumb.store).
 
 The store is separate from the personal platform: people run Hamstr at home and
 never run a store. One store serves many Hamstrs. They share the design system

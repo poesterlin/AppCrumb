@@ -5,6 +5,10 @@ Your data stays on this Home Assistant box.
 
 > Work in progress. Expect changes.
 
+The full manual is at
+[docs.appcrumb.store](https://docs.appcrumb.store), including
+[Home Assistant setup](https://docs.appcrumb.store/install/home-assistant.html).
+
 ## Start
 
 1. Start the add-on.

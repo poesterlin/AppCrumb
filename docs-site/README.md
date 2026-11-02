@@ -1,5 +1,7 @@
 # Hamstr manual
 
+Published at **[docs.appcrumb.store](https://docs.appcrumb.store)**.
+
 The user-facing documentation for Hamstr, built with [VitePress](https://vitepress.dev). It is a normal Markdown site
 plus one dynamic page: the [compose generator](https://github.com/poesterlin/AppCrumb/tree/main/docs-site/install/generator.md),
 which writes a `compose.yaml` and `.env` for the user's setup in the browser.

@@ -46,7 +46,9 @@ it (Home Assistant), then runs everything as uid 10001 (`run.sh`). With
 `ha-addon/` and `repository.yaml` make this repo an add-on repository. The
 add-on's options (`/data/options.json`) become the variables below
 (`ha-options.mjs`); `env` takes extra `NAME=value` entries, such as the DNS
-provider's token. Setup for users: [ha-addon/DOCS.md](../ha-addon/DOCS.md).
+provider's token. Setup for users:
+[docs.appcrumb.store](https://docs.appcrumb.store/install/home-assistant.html)
+([ha-addon/DOCS.md](../ha-addon/DOCS.md) in this repo).
 Release: tag `vX.Y.Z`, then set `version` in `ha-addon/config.yaml` to it.
 
 ## Settings

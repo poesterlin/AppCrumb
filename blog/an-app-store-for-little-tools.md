@@ -172,9 +172,9 @@ names, or your medical data into it?
 
 The code is at
 [github.com/poesterlin/AppCrumb](https://github.com/poesterlin/AppCrumb). The
-[manual](https://github.com/poesterlin/AppCrumb/tree/main/docs-site) covers the
-current install paths. That includes a single-container appliance for amd64 and
-arm64, and a Home Assistant add-on.
+[manual](https://docs.appcrumb.store) covers the current install paths. That
+includes a single-container appliance for amd64 and arm64, and a Home Assistant
+add-on.
 
 Read the
 [security model](https://github.com/poesterlin/AppCrumb/blob/main/docs/SECURITY.md)

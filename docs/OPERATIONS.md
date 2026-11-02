@@ -2,6 +2,7 @@
 
 How to run and develop the platform.
 For the idea behind it, see the [README](../README.md).
+The user-facing manual is at [docs.appcrumb.store](https://docs.appcrumb.store).
 
 ## How it works
 

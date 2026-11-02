@@ -54,11 +54,13 @@ Settings → Add-ons → Add-on Store → ⋮ → Repositories:
 https://github.com/poesterlin/AppCrumb
 ```
 
-Then install **Hamstr**. Setup steps are in [ha-addon/DOCS.md](ha-addon/DOCS.md).
+Then install **Hamstr**. Setup is in the
+[manual](https://docs.appcrumb.store/install/home-assistant.html)
+([ha-addon/DOCS.md](ha-addon/DOCS.md) in this repo).
 
 ## Learn more
 
-- [Manual](docs-site/README.md): install, configure and use Hamstr, with a live compose generator
+- [Manual](https://docs.appcrumb.store): install, configure and use Hamstr, with a live compose generator
 - [Operations](docs/OPERATIONS.md): run and develop the platform
 - [Hamstr](hamstr/README.md): crumbs, accounts and sign-in
 - [Store](store/README.md): publish and install apps
