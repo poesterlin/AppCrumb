@@ -52,7 +52,17 @@ try {
 			});
 		});
 
-	console.log(await run(["publish", join(import.meta.dirname, "fixtures", "secret-santa")], { HAMSTR_STORE: base }));
+	const fixture = join(import.meta.dirname, "fixtures", "secret-santa");
+	await new Promise((resolvePromise, rejectPromise) => {
+		const child = spawn("npm", ["install", "--no-audit", "--no-fund", "--prefix", fixture], {
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		let out = "";
+		child.stdout.on("data", (c) => (out += c));
+		child.stderr.on("data", (c) => (out += c));
+		child.on("close", (code) => (code === 0 ? resolvePromise(undefined) : rejectPromise(new Error(`npm install failed:\n${out}`))));
+	});
+	console.log(await run(["publish", fixture], { HAMSTR_STORE: base }));
 	await node.start();
 	console.log(
 		await run(["install", "e2e/secret-santa", "--host", "demo.test", "--yes", "--watch", "0"], {

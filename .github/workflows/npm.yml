@@ -1,0 +1,110 @@
+name: npm
+
+# Publishes the public npm packages:
+#   @hamstr/cli       (store/cli)
+#   @hamstr/runtime   (packages/runtime)
+#
+# Trigger with a matching tag, or manually:
+#   git tag cli-v0.2.0 && git push origin cli-v0.2.0
+#   git tag runtime-v0.1.0 && git push origin runtime-v0.1.0
+#
+# Auth: npm trusted publishing (OIDC). On npmjs.com, for each package, add a
+# trusted publisher: this GitHub repo, workflow filename `npm.yml`, and allow
+# `npm publish`. Optional fallback: repository secret `NPM_TOKEN` (Automation).
+# First publish of a brand-new scoped package may need the token once, before
+# the trusted publisher can be attached.
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+      - "runtime-v*"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Which package to publish (version comes from its package.json)
+        type: choice
+        options:
+          - cli
+          - runtime
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Resolve package
+        id: pkg
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            name="${{ inputs.package }}"
+            case "$name" in
+              cli) dir="store/cli" ;;
+              runtime) dir="packages/runtime" ;;
+              *) echo "unknown package: $name"; exit 1 ;;
+            esac
+            version=$(node -p "require('./$dir/package.json').version")
+          else
+            tag="${GITHUB_REF_NAME}"
+            case "$tag" in
+              cli-v*)
+                name=cli
+                dir=store/cli
+                version="${tag#cli-v}"
+                ;;
+              runtime-v*)
+                name=runtime
+                dir=packages/runtime
+                version="${tag#runtime-v}"
+                ;;
+              *)
+                echo "tag must be cli-v* or runtime-v*, got: $tag"
+                exit 1
+                ;;
+            esac
+            pkg_version=$(node -p "require('./$dir/package.json').version")
+            if [ "$pkg_version" != "$version" ]; then
+              echo "tag version $version does not match $dir/package.json ($pkg_version)"
+              exit 1
+            fi
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "npm=$(node -p "require('./$dir/package.json').name")" >> "$GITHUB_OUTPUT"
+
+      - name: Install and build @hamstr/cli
+        if: steps.pkg.outputs.name == 'cli'
+        working-directory: store/cli
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          node dist/hamstr.mjs --version
+
+      - name: Check @hamstr/runtime
+        if: steps.pkg.outputs.name == 'runtime'
+        run: node --test packages/runtime/visitor.test.ts
+
+      - name: Publish ${{ steps.pkg.outputs.npm }}@${{ steps.pkg.outputs.version }}
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

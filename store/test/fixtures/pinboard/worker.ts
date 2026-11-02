@@ -1,31 +1,14 @@
-// Pinboard: a Hamstr demo. The app has no login code at all. Hamstr's proxy
-// authenticates the visitor and tells the app who they are and what they may do:
-//
-//   X-Hamstr-User-Id      stable id for a signed-in user (absent for guests)
-//   X-Hamstr-Username     display name, percent-encoded (UTF-8)
-//   X-Hamstr-Permissions  comma-separated permission ids from hamstr.json
-//   X-Hamstr-Role         "owner" or the role id of the share link used
-//
-// Outside Hamstr nobody can send these headers to the app: the router serves
-// crumb sites only to the proxy, and the proxy drops any the browser sends.
+// Pinboard: a Hamstr demo. Identity and Durable Objects go through
+// @hamstr/runtime so the same helpers can later target another workerd host.
+// Outside Hamstr nobody can forge the headers: the router serves crumb sites
+// only to the proxy, and the proxy drops any the browser sends.
+import { objects } from "@hamstr/runtime/objects.ts";
+import { visitor } from "@hamstr/runtime/visitor.ts";
+
 const COLORS = ["sun", "leaf", "sky", "rose", "sand"];
 
 const esc = (value) =>
 	String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
-
-function visitor(request) {
-	let name = "Guest";
-	try {
-		name = decodeURIComponent(request.headers.get("x-hamstr-username") ?? "") || "Guest";
-	} catch {}
-	const perms = new Set((request.headers.get("x-hamstr-permissions") ?? "").split(",").filter(Boolean));
-	return {
-		id: request.headers.get("x-hamstr-user-id") || null,
-		name: name.slice(0, 60),
-		role: request.headers.get("x-hamstr-role") || "",
-		can: (p) => perms.has(p),
-	};
-}
 
 const page = (body, status = 200) =>
 	new Response(
@@ -61,13 +44,14 @@ const redirect = (to) => new Response(null, { status: 303, headers: { location: 
 
 export default {
 	async fetch(request, env) {
+		const obj = objects.from(env);
 		const url = new URL(request.url);
 		if (url.pathname === "/health") return new Response("ok\n", { headers: { "content-type": "text/plain" } });
 		const me = visitor(request);
 
 		// Hamstr's "Download data" (hamstr.json "export"): the whole board as JSON.
 		if (url.pathname === "/export") {
-			const pins = await env.OBJECTS.call("Board", "board", "list");
+			const pins = await obj.call("Board", "board", "list");
 			return Response.json(
 				{ app: "pinboard", exportedAt: new Date().toISOString(), pins: pins.map(({ text, color, author, at }) => ({ text, color, author, at })) },
 				{ headers: { "content-disposition": 'attachment; filename="pinboard.json"' } },
@@ -89,14 +73,14 @@ export default {
 				if (!me.can("pin")) return page("<h1>Read only</h1><p class=dim>You can view this board but not pin to it.</p><p><a href=/>Back</a></p>", 403);
 				const text = String(form.get("text") ?? "").trim().slice(0, 500);
 				const color = COLORS.includes(form.get("color")) ? form.get("color") : COLORS[0];
-				if (text) await env.OBJECTS.call("Board", "board", "add", text, color, me.name, me.id);
+				if (text) await obj.call("Board", "board", "add", text, color, me.name, me.id);
 				return redirect("/");
 			}
 			if (url.pathname === "/remove") {
 				const id = Number(form.get("id"));
 				if (!Number.isSafeInteger(id)) return page("<p>Bad note.</p>", 400);
-				if (me.can("moderate")) await env.OBJECTS.call("Board", "board", "remove", id, null);
-				else if (me.can("pin") && me.id) await env.OBJECTS.call("Board", "board", "remove", id, me.id);
+				if (me.can("moderate")) await obj.call("Board", "board", "remove", id, null);
+				else if (me.can("pin") && me.id) await obj.call("Board", "board", "remove", id, me.id);
 				else return page("<p>You can't remove notes here.</p>", 403);
 				return redirect("/");
 			}
@@ -104,7 +88,7 @@ export default {
 		}
 		if (url.pathname !== "/") return page("<p>Not found.</p>", 404);
 
-		const pins = await env.OBJECTS.call("Board", "board", "list");
+		const pins = await obj.call("Board", "board", "list");
 		const canRemove = (pin) => me.can("moderate") || (me.can("pin") && me.id && pin.authorId === me.id);
 		const compose = me.can("pin")
 			? `<form class="compose" method="post" action="/pin">

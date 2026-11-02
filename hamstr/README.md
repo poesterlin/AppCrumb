@@ -66,7 +66,10 @@ new crumb 65 ms, a proxied request ~1.5 ms more than going straight to celld.
 ## For app developers
 
 Write a normal celld site ([docs/SITES.md](../docs/SITES.md)) and publish it
-with `hamstr publish`. Inside a crumb, read who is visiting from request headers:
+with `hamstr publish`. Prefer [`@hamstr/runtime`](../packages/runtime) for
+visitor identity and Durable Object calls (`visitor(request)`,
+`objects.call(...)`) so the same app can later target another workerd host.
+Inside a crumb, those helpers read:
 
 | Header | Value |
 | --- | --- |

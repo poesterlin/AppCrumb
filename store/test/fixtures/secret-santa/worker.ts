@@ -1,3 +1,6 @@
+import { objects } from "@hamstr/runtime/objects.ts";
+import { visitor } from "@hamstr/runtime/visitor.ts";
+
 const esc = (value) =>
 	String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 
@@ -26,14 +29,16 @@ const redirect = (to) => new Response(null, { status: 303, headers: { location: 
 
 export default {
 	async fetch(request, env) {
+		const obj = objects.from(env);
 		const url = new URL(request.url);
 		if (url.pathname === "/health") return new Response("ok\n", { headers: { "content-type": "text/plain" } });
 
 		// Hamstr's "Download data" (hamstr.json "export"). The pairs are the secret,
 		// so only the owner gets them.
 		if (url.pathname === "/export") {
-			if (request.headers.get("x-hamstr-role") !== "owner") return new Response("owner only\n", { status: 403 });
-			const [people, pairs] = await Promise.all([env.OBJECTS.call("Draw", "main", "list"), env.OBJECTS.call("Draw", "main", "pairs")]);
+			const me = visitor(request);
+			if (me.role !== "owner") return new Response("owner only\n", { status: 403 });
+			const [people, pairs] = await Promise.all([obj.call("Draw", "main", "list"), obj.call("Draw", "main", "pairs")]);
 			return Response.json(
 				{ app: "secret-santa", exportedAt: new Date().toISOString(), people, pairs: pairs.map(([giver, receiver]) => ({ giver, receiver })) },
 				{ headers: { "content-disposition": 'attachment; filename="secret-santa.json"' } },
@@ -49,16 +54,16 @@ export default {
 			}
 			const name = String(form.get("name") ?? "").trim();
 			if (url.pathname === "/add") {
-				if (name) await env.OBJECTS.call("Draw", "main", "add", name.slice(0, 40));
+				if (name) await obj.call("Draw", "main", "add", name.slice(0, 40));
 				return redirect("/");
 			}
 			if (url.pathname === "/reset") {
-				await env.OBJECTS.call("Draw", "main", "reset");
+				await obj.call("Draw", "main", "reset");
 				return redirect("/");
 			}
 			if (url.pathname === "/draw") {
 				try {
-					const pairs = await env.OBJECTS.call("Draw", "main", "draw");
+					const pairs = await obj.call("Draw", "main", "draw");
 					return page(`<h1>Who buys for whom</h1>
 <p class="dim">Screenshot this, then delete the draw if the surprise matters.</p>
 <div class="card"><ul class="pairs">${pairs.map(([a, b]) => `<li><span>${esc(a)}</span><span>→ ${esc(b)}</span></li>`).join("")}</ul></div>
@@ -70,8 +75,8 @@ export default {
 			return page("<p>Not found.</p>", 404);
 		}
 
-		const names = await env.OBJECTS.call("Draw", "main", "list");
-		const pairs = await env.OBJECTS.call("Draw", "main", "pairs");
+		const names = await obj.call("Draw", "main", "list");
+		const pairs = await obj.call("Draw", "main", "pairs");
 		const list = names.length
 			? `<ul>${names.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`
 			: '<p class="dim">No names yet.</p>';

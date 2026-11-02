@@ -9,10 +9,26 @@ Needs Node 20 or newer. No checkout of this repo, no Docker.
 ## Install
 
 ```sh
-npm install -g @hamstr/cli        # once it is published to npm
-# until then, from a checkout:
+npm install -g @hamstr/cli
+# from a checkout instead:
 npm pack ./store/cli && npm install -g ./hamstr-cli-*.tgz
 ```
+
+## Releasing to npm
+
+Version is `store/cli/package.json` (keep `VERSION` in `hamstr.ts` in sync). Tag and
+push, or run the **npm** workflow manually:
+
+```sh
+# bump version in package.json and hamstr.ts, then:
+git tag cli-v0.2.0
+git push origin cli-v0.2.0
+```
+
+Publishing uses npm trusted publishing (OIDC) from `.github/workflows/npm.yml`.
+On npmjs.com → `@hamstr/cli` → Trusted Publisher: this repo, workflow `npm.yml`.
+For a brand-new package, an Automation `NPM_TOKEN` repository secret can publish
+the first release before the trusted publisher is attached.
 
 ## Publish an app
 

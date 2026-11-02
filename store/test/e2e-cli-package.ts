@@ -39,7 +39,18 @@ try {
 	const storeUrl = `http://127.0.0.1:${(store.server.address() as import("node:net").AddressInfo).port}`;
 	await node.start();
 	const app = join(work, "secret-santa");
-	cpSync(join(repo, "store", "test", "fixtures", "secret-santa"), app, { recursive: true });
+	cpSync(join(repo, "store", "test", "fixtures", "secret-santa"), app, {
+		recursive: true,
+		filter: (src) => !src.split(/[/\\]/).includes("node_modules"),
+	});
+	// The fixture depends on @hamstr/runtime via file:; outside the repo that
+	// path is wrong, so ship a copy next to the app and reinstall.
+	cpSync(join(repo, "packages", "runtime"), join(work, "runtime"), { recursive: true });
+	writeFileSync(
+		join(app, "package.json"),
+		`${JSON.stringify({ private: true, type: "module", dependencies: { "@hamstr/runtime": "file:../runtime" } }, null, "\t")}\n`,
+	);
+	sh("npm", ["install", "--silent", "--no-audit", "--no-fund", "--prefix", app]);
 	const tokenFile = join(work, "admin-token");
 	writeFileSync(tokenFile, `${node.adminToken}\n`, { mode: 0o600 });
 

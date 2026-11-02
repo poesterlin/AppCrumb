@@ -46,6 +46,9 @@ jobs:
           for dir in packages/app-format store store/cli store/web hamstr; do
             npm ci --prefix "$dir" --no-audit --no-fund
           done
+          for dir in store/test/fixtures/secret-santa store/test/fixtures/pinboard; do
+            npm install --prefix "$dir" --no-audit --no-fund
+          done
       - name: Typecheck every package
         run: npm run typecheck
       - name: Store (API, bundles, manifests, web serving, moderation; embedded Postgres)
@@ -82,6 +85,9 @@ jobs:
         run: |
           for dir in tools packages/app-format store store/cli hamstr; do
             npm ci --prefix "$dir" --no-audit --no-fund
+          done
+          for dir in store/test/fixtures/secret-santa store/test/fixtures/pinboard; do
+            npm install --prefix "$dir" --no-audit --no-fund
           done
       - name: Install celld (the version the node image uses, copied out of its image)
         run: |

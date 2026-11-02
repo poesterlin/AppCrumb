@@ -1,0 +1,32 @@
+{
+	"name": "@hamstr/runtime",
+	"version": "0.1.0",
+	"description": "Small helpers for Hamstr/celld apps: visitor identity, Durable Object calls, and assets — so the same app code can target celld today and other workerd hosts later",
+	"type": "module",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/poesterlin/celld-sites.git",
+		"directory": "packages/runtime"
+	},
+	"homepage": "https://github.com/poesterlin/celld-sites/tree/main/packages/runtime",
+	"files": [
+		"index.ts",
+		"visitor.ts",
+		"objects.ts",
+		"assets.ts",
+		"README.md"
+	],
+	"exports": {
+		".": "./index.ts",
+		"./visitor.ts": "./visitor.ts",
+		"./objects.ts": "./objects.ts",
+		"./assets.ts": "./assets.ts"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}

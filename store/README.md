@@ -138,6 +138,7 @@ data is yours" property.
 | `web/` | store container | the web UI: a SvelteKit single-page app built on `packages/ui` (the same components as Hamstr's own store pages) |
 | `../packages/app-format/manifest.ts` | store, CLI, Hamstr | `hamstr.json` schema and egress host rules |
 | `../packages/app-format/bundle.ts` | store, CLI, Hamstr | tar.gz validation: safe paths, regular files only, size caps, blob hash equality, `code.json` cross-check |
+| `../packages/runtime` | apps | `visitor` / `objects` / `assets` helpers so app code stays portable across workerd hosts |
 | `cli/` | publisher/developer machine | the `hamstr` CLI (npm package `@hamstr/cli`, see [cli/README.md](cli/README.md)): register/login, publish (build + pack + upload), install into a celld node over its admin API or a compose stack, update/list/report. Needs no checkout of this repo |
 | `celld-demo` (compose) | separate node | disposable per-session copies for "Try it"; own bucket/token, no egress |
 | `test/fixtures/` | repo | apps the tests publish: `secret-santa` (one worker, one Durable Object) and `pinboard` (a Hamstr crumb app). The demo apps (gym-log, bookmarks, …) live outside this repo |
@@ -683,7 +684,9 @@ a flag on this one.
 ```sh
 npm install --prefix packages/app-format
 npm install --prefix store
-npm test --prefix store          # manifest, bundle, API and web-serving suites (node:test)
+npm install --prefix store/test/fixtures/secret-santa
+npm install --prefix store/test/fixtures/pinboard
+npm test --prefix store          # runtime helpers, manifest, bundle, API and web-serving suites (node:test)
 ```
 
 `store/test/api.test.ts` starts the real server on an ephemeral port with a
