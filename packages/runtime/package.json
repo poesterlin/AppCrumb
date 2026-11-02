@@ -6,10 +6,10 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/poesterlin/celld-sites.git",
+		"url": "git+https://github.com/poesterlin/AppCrumb.git",
 		"directory": "packages/runtime"
 	},
-	"homepage": "https://github.com/poesterlin/celld-sites/tree/main/packages/runtime",
+	"homepage": "https://github.com/poesterlin/AppCrumb/tree/main/packages/runtime",
 	"files": [
 		"index.ts",
 		"visitor.ts",

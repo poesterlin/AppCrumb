@@ -6,10 +6,10 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/poesterlin/celld-sites.git",
+		"url": "git+https://github.com/poesterlin/AppCrumb.git",
 		"directory": "store/cli"
 	},
-	"homepage": "https://github.com/poesterlin/celld-sites/tree/main/store/cli",
+	"homepage": "https://github.com/poesterlin/AppCrumb/tree/main/store/cli",
 	"bin": {
 		"hamstr": "dist/hamstr.mjs"
 	},

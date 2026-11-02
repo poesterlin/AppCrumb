@@ -12,7 +12,7 @@ the chance a bad app reaches you. It is **not** a sandbox.
 What an app can reach, what a bug in one can break, and what you have to decide before running someone else's code.
 
 The repository's
-[docs/SECURITY.md](https://github.com/poesterlin/celld-sites/blob/main/docs/SECURITY.md) is the detailed version. This
+[docs/SECURITY.md](https://github.com/poesterlin/AppCrumb/blob/main/docs/SECURITY.md) is the detailed version. This
 page is the operator's summary.
 
 ## Trust levels

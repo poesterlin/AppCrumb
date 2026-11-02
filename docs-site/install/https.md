@@ -124,7 +124,7 @@ normal Docker network hides the host's interface, and the install cannot guess t
 
 ### Hosting a service for other people
 
-The service is [names/](https://github.com/poesterlin/celld-sites/tree/main/names) in this repository. Anyone can run
+The service is [names/](https://github.com/poesterlin/AppCrumb/tree/main/names) in this repository. Anyone can run
 it; it is not tied to a central instance. Give people the URL and they use it as `NAME_SERVICE_URL`.
 
 To run one:
@@ -134,8 +134,8 @@ To run one:
 2. **The API.** Put the HTTP API behind HTTPS (Caddy, Traefik or a tunnel). Set `TRUST_PROXY=true` behind a proxy so
    registration limits see the client's address.
 3. **Configuration.** Set `ZONE` and `NAMESERVERS`; see
-   [names/server/.env.example](https://github.com/poesterlin/celld-sites/blob/main/names/server/.env.example) and the
-   [names README](https://github.com/poesterlin/celld-sites/tree/main/names).
+   [names/server/.env.example](https://github.com/poesterlin/AppCrumb/blob/main/names/server/.env.example) and the
+   [names README](https://github.com/poesterlin/AppCrumb/tree/main/names).
 4. **The Public Suffix List.** Submit the zone before real users arrive. Without it, every install shares one
    registered domain for cookies and Let's Encrypt's certificate limits, and one install could set a cookie for
    another.

@@ -108,9 +108,9 @@ export default defineConfig({
 			],
 		},
 		search: { provider: "local" },
-		socialLinks: [{ icon: "github", link: "https://github.com/poesterlin/celld-sites" }],
+		socialLinks: [{ icon: "github", link: "https://github.com/poesterlin/AppCrumb" }],
 		editLink: {
-			pattern: "https://github.com/poesterlin/celld-sites/edit/main/docs-site/:path",
+			pattern: "https://github.com/poesterlin/AppCrumb/edit/main/docs-site/:path",
 			text: "Edit this page",
 		},
 		footer: {

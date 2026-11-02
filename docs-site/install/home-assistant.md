@@ -7,7 +7,7 @@ each.
 
 1. **Settings → Add-ons → Add-on Store**.
 2. **⋮** (top right) → **Repositories**.
-3. Add `https://github.com/poesterlin/celld-sites` and close.
+3. Add `https://github.com/poesterlin/AppCrumb` and close.
 4. Install **Hamstr**, then **Start**.
 5. Click **Hamstr** in the sidebar, then **Open Hamstr**.
 

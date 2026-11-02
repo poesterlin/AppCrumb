@@ -9,7 +9,7 @@
 	"icon": "📖",
 	"category": "learning",
 	"tags": ["docs", "manual", "self-hosting", "homelab"],
-	"homepage": "https://github.com/poesterlin/celld-sites/tree/main/docs-site",
-	"source": "https://github.com/poesterlin/celld-sites",
+	"homepage": "https://github.com/poesterlin/AppCrumb/tree/main/docs-site",
+	"source": "https://github.com/poesterlin/AppCrumb",
 	"instances": "single"
 }

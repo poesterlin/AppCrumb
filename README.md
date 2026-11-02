@@ -51,7 +51,7 @@ On Home Assistant, add this repository under
 Settings → Add-ons → Add-on Store → ⋮ → Repositories:
 
 ```
-https://github.com/poesterlin/celld-sites
+https://github.com/poesterlin/AppCrumb
 ```
 
 Then install **Hamstr**. Setup steps are in [ha-addon/DOCS.md](ha-addon/DOCS.md).

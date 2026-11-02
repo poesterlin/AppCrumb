@@ -34,7 +34,7 @@ The repository's own `compose.yaml` is a different thing from the appliance:
 - it expects Traefik on an external `traefik_web` network.
 
 That stack is for developing this project or operating a node that publishes apps to a store. It is documented in
-[docs/OPERATIONS.md](https://github.com/poesterlin/celld-sites/blob/main/docs/OPERATIONS.md), not here.
+[docs/OPERATIONS.md](https://github.com/poesterlin/AppCrumb/blob/main/docs/OPERATIONS.md), not here.
 
 ## Build from source
 

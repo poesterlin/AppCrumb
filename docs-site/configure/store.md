@@ -82,7 +82,7 @@ COMPOSE_PROFILES=store
 
 It is LAN-only by default. Making it public is a Cloudflare tunnel entry plus `STORE_REQUIRE_REVIEW=1`, and it brings
 legal obligations (an Impressum and a privacy policy if you operate it from Germany). See the repository's
-[store README](https://github.com/poesterlin/celld-sites/tree/main/store), especially "Going public" and
+[store README](https://github.com/poesterlin/AppCrumb/tree/main/store), especially "Going public" and
 "Moderation".
 
 Review is a store setting, not a runtime property. A self-hosted store can run with `STORE_REQUIRE_REVIEW=0`, and then

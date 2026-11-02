@@ -61,7 +61,7 @@ a port each from the range. Read [Home mode](/install/home-mode) before you rely
 Add this repository under **Settings → Add-ons → Add-on Store → ⋮ → Repositories**:
 
 ```
-https://github.com/poesterlin/celld-sites
+https://github.com/poesterlin/AppCrumb
 ```
 
 Install **Hamstr**, start it, and click **Hamstr** in the sidebar. The add-on starts in home mode: no sign-in, plain
@@ -81,7 +81,7 @@ docker compose up -d --build
 
 Optional parts are Compose profiles: `COMPOSE_PROFILES=hamstr` for Hamstr, `store` for the store and moderation,
 `tsidp` for Tailscale sign-in. The details are in the repository's
-[operations guide](https://github.com/poesterlin/celld-sites/blob/main/docs/OPERATIONS.md).
+[operations guide](https://github.com/poesterlin/AppCrumb/blob/main/docs/OPERATIONS.md).
 
 The stack and the appliance are two ways to run the same code. Do not run both against the same data.
 

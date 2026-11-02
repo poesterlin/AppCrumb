@@ -74,7 +74,7 @@ on the Hamstr home screen.
 
 Yes. An app is a normal celld site plus a `hamstr.json` manifest. The contract — identity headers, permissions,
 single-instance apps, exports — is in the repository's
-[Hamstr README](https://github.com/poesterlin/celld-sites/tree/main/hamstr).
+[Hamstr README](https://github.com/poesterlin/AppCrumb/tree/main/hamstr).
 
 ## Is it ready for my family's data?
 

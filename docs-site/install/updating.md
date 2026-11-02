@@ -50,7 +50,7 @@ docker compose up -d
 
 The two stacks use the same Compose project name (`celld-sites`), so they share volumes — and must never run at the
 same time. See the repository's
-[operations guide](https://github.com/poesterlin/celld-sites/blob/main/docs/OPERATIONS.md).
+[operations guide](https://github.com/poesterlin/AppCrumb/blob/main/docs/OPERATIONS.md).
 
 ## What survives
 
