@@ -584,6 +584,7 @@ describe("publisher accounts", () => {
 describe("rate limits behind proxies", () => {
 	it("counts visitors by the header the proxy sets, not by the last proxy hop", async () => {
 		const dir3 = mkdtempSync(join(tmpdir(), "store-api-ip-"));
+		// Loopback peers are attested (unit tests); production uses STORE_PROXY_SECRET.
 		const limited = createStore({ dataDir: dir3, logging: false, clientIpHeader: "X-Real-Ip" });
 		const base3 = `http://127.0.0.1:${(await limited.listen(0, "127.0.0.1")).port}`;
 		try {
@@ -597,6 +598,50 @@ describe("rate limits behind proxies", () => {
 		} finally {
 			await limited.close();
 			rmSync(dir3, { recursive: true, force: true });
+		}
+	});
+
+	it("ignores a forged client-IP header without proxy attestation", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "store-api-ip-forge-"));
+		const limited = createStore({
+			dataDir: dir,
+			logging: false,
+			clientIpHeader: "X-Real-Ip",
+			proxySecret: "test-proxy-secret",
+			host: "0.0.0.0",
+		});
+		const port = (await limited.listen(0, "0.0.0.0")).port;
+		// Connect via the machine's non-loopback address so the peer is not attested by loopback.
+		const { networkInterfaces } = await import("node:os");
+		const lan = Object.values(networkInterfaces())
+			.flat()
+			.find((a) => a && a.family === "IPv4" && !a.internal)?.address;
+		if (!lan) {
+			await limited.close();
+			rmSync(dir, { recursive: true, force: true });
+			return; // skip on hosts with no LAN address
+		}
+		const base = `http://${lan}:${port}`;
+		try {
+			const forge = (ip: string) => ({ "x-real-ip": ip });
+			const register = (name: string, ip: string, extra: Record<string, string> = {}) =>
+				call(base, "/api/v1/publishers", {
+					method: "POST",
+					headers: { ...forge(ip), ...extra },
+					json: { name, password: "correct horse battery", acceptPolicy: true },
+				});
+			for (let i = 0; i < 5; i++) {
+				assert.equal((await register(`forge-a${i}`, `203.0.113.${10 + i}`)).status, 201, "forged header must not create new buckets");
+			}
+			assert.equal((await register("forge-a5", "203.0.113.99")).status, 429, "peer address is limited");
+			assert.equal(
+				(await register("forge-ok", "203.0.113.50", { "x-hamstr-proxy": "test-proxy-secret" })).status,
+				201,
+				"attested proxy may set the visitor address",
+			);
+		} finally {
+			await limited.close();
+			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 });

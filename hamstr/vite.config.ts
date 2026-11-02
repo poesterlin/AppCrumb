@@ -6,7 +6,7 @@ import { kitOptions } from "../packages/ui/kit.ts";
 export default defineConfig({
 	// The design system (packages/ui) and the app format live outside this app.
 	server: { fs: { allow: [".."] } },
-	// The CSP directives that never change come from kitOptions(); the grain
+	// The CSP directives that never change come from kitOptions(); the crumb
 	// origin depends on runtime config and is appended by hooks.server.ts.
 	plugins: [sveltekit({ ...kitOptions(), adapter: adapter() })]
 });

@@ -1,4 +1,4 @@
-# Shared by both Caddyfiles: the shell and every grain go to Hamstr, anything
+# Shared by both Caddyfiles: the shell and every crumb go to Hamstr, anything
 # else to the celld router.
 
 # The router's admin API answers on this name only. It is reached on loopback,
@@ -7,10 +7,10 @@
 respond @admin 404
 
 @hamstr host {$HAMSTR_HOST}
-@grains {
-	host *.{$HAMSTR_GRAIN_DOMAIN}
-	header_regexp Host ^grain-
+@crumbs {
+	host *.{$HAMSTR_CRUMB_DOMAIN}
+	header_regexp Host ^crumb-
 }
 reverse_proxy @hamstr 127.0.0.1:{$HAMSTR_PORT}
-reverse_proxy @grains 127.0.0.1:{$HAMSTR_PORT}
+reverse_proxy @crumbs 127.0.0.1:{$HAMSTR_PORT}
 reverse_proxy 127.0.0.1:{$CELLD_PORT}

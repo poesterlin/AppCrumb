@@ -62,13 +62,13 @@ If an app declares internet access and an admin allows it:
 Changing the list clears the cache and aborts the app's running objects, so a long-lived object cannot keep using the
 old allowlist.
 
-## Grains
+## Crumbs
 
-- A grain belongs to the person who made it. There are no share links.
-- The grain proxy strips `X-Hamstr-*` from the browser and adds them itself. A grain can trust those headers only
-  because celld refuses requests to `grain-*` sites without `PROXY_TOKEN`.
-- Cookies with a `Domain` attribute are dropped, so one grain cannot set a cookie for another.
-- A grain runs inside the shell's iframe (`frame-ancestors` is the shell) and can also open in its own tab.
+- A crumb belongs to the person who made it. There are no share links.
+- The crumb proxy strips `X-Hamstr-*` from the browser and adds them itself. A crumb can trust those headers only
+  because celld refuses requests to `crumb-*` sites without `PROXY_TOKEN`.
+- Cookies with a `Domain` attribute are dropped, so one crumb cannot set a cookie for another.
+- A crumb runs inside the shell's iframe (`frame-ancestors` is the shell) and can also open in its own tab.
 
 ## The control plane
 

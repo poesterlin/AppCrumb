@@ -3,8 +3,8 @@
 // into a toast rather than a downloaded error page.
 import { ApiError } from "./api.ts";
 
-export const downloadGrain = (id) => download(`/api/grains/${id}/export`);
-export const downloadBackup = (id) => download(`/api/grains/${id}/backup`);
+export const downloadCrumb = (id) => download(`/api/crumbs/${id}/export`);
+export const downloadBackup = (id) => download(`/api/crumbs/${id}/backup`);
 
 async function download(path) {
 	const res = await fetch(path, { credentials: "same-origin" });

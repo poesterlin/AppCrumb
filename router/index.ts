@@ -82,9 +82,9 @@ export default {
 			version = await env.CODE.get(`site:${site}`);
 		}
 		if (!version) return new Response(`No site for ${host}`, { status: 404 });
-		// Sites under PROXY_SITE_PREFIX (Hamster grains) belong to a front proxy
+		// Sites under PROXY_SITE_PREFIX (Hamster crumbs) belong to a front proxy
 		// that authenticates the visitor and sets identity headers. Only that proxy
-		// knows the token, so another container on the bridge cannot reach a grain
+		// knows the token, so another container on the bridge cannot reach a crumb
 		// directly or forge its identity headers.
 		const proxied = proxyPrefix(env) !== "" && site.startsWith(proxyPrefix(env));
 		const supplied = request.headers.get(PROXY_HEADER);

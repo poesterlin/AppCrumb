@@ -29,8 +29,8 @@ configuration:
   hamstr_host:
     name: Hostname
     description: Only with tls_mode off and sign-in required.
-  grain_domain:
-    name: Grain domain
+  crumb_domain:
+    name: Crumb domain
     description: Only with tls_mode off and sign-in required.
   oidc_name:
     name: Sign-in provider name

@@ -9,8 +9,8 @@ Booleans are `true`/`false`. Values in a compose file are strings unless the fil
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HAMSTR_AUTH` | `required` | `none` turns on [home mode](/install/home-mode): no sign-in, plain HTTP, a port per grain. |
-| `HAMSTR_GRAIN_PORTS` | `20000-20999` | Home mode: the host ports grains may use. |
+| `HAMSTR_AUTH` | `required` | `none` turns on [home mode](/install/home-mode): no sign-in, plain HTTP, a port per crumb. |
+| `HAMSTR_CRUMB_PORTS` | `20000-20999` | Home mode: the host ports crumbs may use. |
 | `HTTP_PORT` | `8000` | The container's plain-HTTP port. |
 | `HTTPS_PORT` | `8443` | The container's HTTPS port. |
 | `CELLD_LOG` | `warn` | celld's log level (`RUST_LOG`). `info` adds several routine lines a second. |
@@ -32,7 +32,7 @@ with other services. See [Ports](/reference/ports).
 | `NAME_SERVICE_URL` | — | `names` mode: the names service, HTTPS only. |
 | `ADDRESS_IPV4`, `ADDRESS_IPV6` | host's Tailscale address | `names` mode: what the name points at. |
 | `HAMSTR_HOST` | the TLS hostname | The shell's hostname. Required with `TLS_MODE=off`. |
-| `HAMSTR_GRAIN_DOMAIN` | the TLS hostname | Grains are `grain-<id>.<this>`. Required with `TLS_MODE=off`. |
+| `HAMSTR_CRUMB_DOMAIN` | the TLS hostname | Crumbs are `crumb-<id>.<this>`. Required with `TLS_MODE=off`. |
 | `HAMSTR_SCHEME` | `https` | What browsers use. `http` only for tests or plain proxies. |
 
 ## Sign-in
@@ -55,7 +55,7 @@ The `OIDC_*` variables seed the first provider on a fresh install and are ignore
 | --- | --- | --- |
 | `HAMSTR_STORE` | — | The store apps come from. Empty means no store. |
 | `HAMSTR_STORE_PUBLIC` | `HAMSTR_STORE` | The store's public URL, used for links. |
-| `HAMSTR_PROXY_TOKEN` | generated | Appliance internal: proves a grain request came through Hamstr. Do not set by hand. |
+| `HAMSTR_PROXY_TOKEN` | generated | Appliance internal: proves a crumb request came through Hamstr. Do not set by hand. |
 
 ## Limits
 

@@ -1,6 +1,6 @@
 # HTTPS and domains
 
-Hamstr needs a wildcard certificate, because every grain is its own origin at `grain-<id>.<domain>`.
+Hamstr needs a wildcard certificate, because every crumb is its own origin at `crumb-<id>.<domain>`.
 
 That rules out HTTP-01: Let's Encrypt cannot issue a wildcard that way. The appliance gets certificates with
 **DNS-01** — it proves control of the domain by writing a TXT record through your DNS provider's API.
@@ -29,8 +29,8 @@ environment:
   # the provider's token comes from .env (see the generator)
 ```
 
-The install's hostname becomes `example.com`, and grains live under it. Override them with `HAMSTR_HOST` and
-`HAMSTR_GRAIN_DOMAIN` if you want the shell somewhere else — as long as both names resolve to this box.
+The install's hostname becomes `example.com`, and crumbs live under it. Override them with `HAMSTR_HOST` and
+`HAMSTR_CRUMB_DOMAIN` if you want the shell somewhere else — as long as both names resolve to this box.
 
 ### DNS records
 
@@ -152,11 +152,11 @@ logs show the install's hostname.
 environment:
   - TLS_MODE=off
   - HAMSTR_HOST=hamstr.example.com
-  - HAMSTR_GRAIN_DOMAIN=example.com
+  - HAMSTR_CRUMB_DOMAIN=example.com
   - HAMSTR_SCHEME=https
 ```
 
-Nothing in the container does TLS. The proxy must route the shell hostname and `grain-*.<grain domain>` here. See
+Nothing in the container does TLS. The proxy must route the shell hostname and `crumb-*.<crumb domain>` here. See
 [Behind a proxy](/install/proxy).
 
 ## Renewal and changes
@@ -164,7 +164,7 @@ Nothing in the container does TLS. The proxy must route the shell hostname and `
 - Certificates renew automatically; a renewal reloads Caddy.
 - Changing the hostname means a new certificate and a restart of the container (Hamstr was started for the old name).
 - `ACME_SERVER` points at another ACME directory (a test CA or a private one). `ACME_EMAIL` sets the account contact.
-- Certificate Transparency logs will contain the install's hostname. The wildcard keeps individual grain names out.
+- Certificate Transparency logs will contain the install's hostname. The wildcard keeps individual crumb names out.
 
 ## Troubleshooting
 

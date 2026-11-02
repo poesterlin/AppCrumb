@@ -6,7 +6,7 @@ with, and what the [generator](/install/generator) produces when you pick *Home 
 ```yaml
 environment:
   - HAMSTR_AUTH=none
-  - HAMSTR_GRAIN_PORTS=20000-20999
+  - HAMSTR_CRUMB_PORTS=20000-20999
 ports:
   - "8000:8000"
   - "20000-20999:20000-20999"
@@ -19,8 +19,8 @@ Open `http://<box>:8000`.
 - **No sign-in.** Every visitor is the owner. Anyone on your network — guests included — can read, change and delete
   everything.
 - **Plain HTTP.** No certificate, no domain, no DNS provider.
-- **A port per grain.** There are no grain hostnames. When a grain is first opened, Hamstr gives it a port from
-  `HAMSTR_GRAIN_PORTS`, and Caddy starts listening on it. A separate port is a separate origin, so grains stay
+- **A port per crumb.** There are no crumb hostnames. When a crumb is first opened, Hamstr gives it a port from
+  `HAMSTR_CRUMB_PORTS`, and Caddy starts listening on it. A separate port is a separate origin, so crumbs stay
   isolated from each other and from the shell.
 
 ## What does not work
@@ -44,7 +44,7 @@ There are two ways:
 the container has no host network and the ports are fixed at start.
 
 **Share the host's network.** `network_mode: host` is what the Home Assistant add-on does. Hamstr then listens on the
-box's own interfaces and grains open their ports directly. Other containers share those ports, so check for conflicts.
+box's own interfaces and crumbs open their ports directly. Other containers share those ports, so check for conflicts.
 
 The appliance's ports are in the [ports reference](/reference/ports).
 
@@ -57,8 +57,8 @@ Home mode is a setting, not a separate edition:
 3. Register an OIDC client and set `OIDC_*`.
 4. Restart the container.
 
-Existing grains keep their data. Their addresses change from `http://box:<port>` to
-`https://grain-<id>.<domain>`, so bookmarks change.
+Existing crumbs keep their data. Their addresses change from `http://box:<port>` to
+`https://crumb-<id>.<domain>`, so bookmarks change.
 
 ::: warning Be honest about the network
 Home mode is fine for a box on a trusted LAN or behind a VPN. Do not expose it to the internet: there is no

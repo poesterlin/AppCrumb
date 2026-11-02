@@ -24,7 +24,7 @@ The add-on starts with `auth: none`:
 - Anyone who can reach the box is the owner, including guests on your Wi-Fi.
 - Plain HTTP. Browsers mark it "not secure".
 - Passkeys, the clipboard, the camera and microphone, and installing apps to a home screen do not work.
-- Each grain gets a port from `20000` up.
+- Each crumb gets a port from `20000` up.
 
 Read [Home mode](/install/home-mode) for the trade-offs before putting anything important in it.
 
@@ -41,7 +41,7 @@ Read [Home mode](/install/home-mode) for the trade-offs before putting anything 
 | `name_service_url` | URL | `names` mode: an HTTPS names service. |
 | `address` | IP | `names` mode: the address to publish. Found from Tailscale when empty. |
 | `acme_email` | email | Contact address for the certificate account. |
-| `hamstr_host`, `grain_domain` | hostnames | Override the hostname and the domain grains live under. |
+| `hamstr_host`, `crumb_domain` | hostnames | Override the hostname and the domain crumbs live under. |
 | `oidc_name`, `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` | | The first sign-in provider. |
 
 ## Sign-in and HTTPS

@@ -17,8 +17,8 @@ export async function load({ locals, params }) {
 	if (!row && detail?.app?.id) row = c.q.appByStoreId.get(detail.app.id);
 	const installed = row
 		? c.appJson(row, {
-				grains: c.db.prepare("SELECT COUNT(*) AS n FROM grains WHERE slug = ?").get(row.slug).n,
-				mine: c.db.prepare("SELECT COUNT(*) AS n FROM grains WHERE slug = ? AND owner_id = ? AND trashed_at IS NULL").get(row.slug, me.id).n,
+				crumbs: c.db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE slug = ?").get(row.slug).n,
+				mine: c.db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE slug = ? AND owner_id = ? AND trashed_at IS NULL").get(row.slug, me.id).n,
 			})
 		: null;
 	if (!detail && !installed) return { missing: true, error };

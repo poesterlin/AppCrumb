@@ -100,8 +100,8 @@ services:
       # tip it over, and an isolate over the limit stops materializing result
       # sets ("the isolate is over its V8 heap limit").
       CELLD_V8_HEAP_LIMIT_MB: ${CELLD_V8_HEAP_LIMIT_MB:-256}
-      # Hamstr grains (sites named grain-*) answer only requests that carry this
-      # token, i.e. only the Hamstr proxy. Empty: grain sites answer nobody.
+      # Hamstr crumbs (sites named crumb-*) answer only requests that carry this
+      # token, i.e. only the Hamstr proxy. Empty: crumb sites answer nobody.
       PROXY_TOKEN: ${HAMSTR_PROXY_TOKEN:-}
     # celld's local working copy (SQLite, replication); the bucket is the source
     # of truth, this just saves re-downloading objects after a restart.
@@ -328,7 +328,9 @@ services:
       # The visitor's address for rate limits. Traefik sets X-Real-Ip itself (from
       # Cf-Connecting-Ip for tunnel traffic); behind its two hops the last
       # X-Forwarded-For entry is Traefik, which would put everyone in one bucket.
+      # Honour X-Real-Ip only when X-Hamstr-Proxy matches STORE_PROXY_SECRET.
       STORE_CLIENT_IP_HEADER: ${STORE_CLIENT_IP_HEADER:-x-real-ip}
+      STORE_PROXY_SECRET: ${STORE_PROXY_SECRET:?Set STORE_PROXY_SECRET in .env (openssl rand -hex 24)}
       # Footer links to the operator's legal notice and privacy policy.
       STORE_IMPRINT_URL: ${STORE_IMPRINT_URL:-}
       STORE_PRIVACY_URL: ${STORE_PRIVACY_URL:-}
@@ -371,6 +373,8 @@ services:
       - 'traefik.docker.network=traefik_web'
       - 'traefik.http.routers.store.rule=Host(`${STORE_HOST:-store.example.com}`)'
       - 'traefik.http.routers.store.priority=20'
+      - 'traefik.http.routers.store.middlewares=store-proxy'
+      - 'traefik.http.middlewares.store-proxy.headers.customrequestheaders.X-Hamstr-Proxy=${STORE_PROXY_SECRET}'
       - 'traefik.http.services.store.loadbalancer.server.port=3000'
 
   # Store moderation (store/moderation/): the review queue, automatic checks
@@ -394,9 +398,19 @@ services:
       PORT: 3000
       STORE_DATA_DIR: /data
       DATABASE_URL: postgres://store:${STORE_DB_PASSWORD}@store-db:5432/store
-      MODERATION_PASSWORD: ${MODERATION_PASSWORD:?Set MODERATION_PASSWORD in .env (openssl rand -base64 18)}
+      # Shared password (dev) or OIDC (production). Prefer OIDC; when
+      # MODERATION_OIDC_* is set the password form is disabled.
+      MODERATION_PASSWORD: ${MODERATION_PASSWORD:-}
+      MODERATION_PUBLIC_URL: https://${MODERATION_HOST:-moderation.example.com}
+      MODERATION_OIDC_NAME: ${MODERATION_OIDC_NAME:-Tailscale}
+      MODERATION_OIDC_ISSUER: ${MODERATION_OIDC_ISSUER:-}
+      MODERATION_OIDC_CLIENT_ID: ${MODERATION_OIDC_CLIENT_ID:-}
+      MODERATION_OIDC_CLIENT_SECRET: ${MODERATION_OIDC_CLIENT_SECRET:-}
+      # Optional: comma-separated emails / usernames / subjects allowed to moderate.
+      MODERATION_OIDC_ALLOW: ${MODERATION_OIDC_ALLOW:-}
       STORE_PUBLIC_URL: https://${STORE_HOST:-store.example.com}
       STORE_CLIENT_IP_HEADER: ${STORE_CLIENT_IP_HEADER:-x-real-ip}
+      STORE_PROXY_SECRET: ${STORE_PROXY_SECRET:?Set STORE_PROXY_SECRET in .env (openssl rand -hex 24)}
       # Policy (see store/README.md, "Moderation"). Defaults: review from 0.4,
       # block automatically from 0.9, a person approves everything except
       # low-risk releases of publishers marked trusted.
@@ -437,9 +451,11 @@ services:
       - 'traefik.docker.network=traefik_web'
       - 'traefik.http.routers.moderation.rule=Host(`${MODERATION_HOST:-moderation.example.com}`)'
       - 'traefik.http.routers.moderation.priority=20'
+      - 'traefik.http.routers.moderation.middlewares=moderation-proxy'
+      - 'traefik.http.middlewares.moderation-proxy.headers.customrequestheaders.X-Hamstr-Proxy=${STORE_PROXY_SECRET}'
       - 'traefik.http.services.moderation.loadbalancer.server.port=3000'
 
-  # Hamstr: the personal app shell (grains) and the sign-in for this node:
+  # Hamstr: the personal app shell (crumbs) and the sign-in for this node:
   # people, groups and which celld sites they may open. It holds ADMIN_TOKEN,
   # AUTH_KEY and the proxy token, so it is LAN-only.
   # Off unless COMPOSE_PROFILES includes "hamstr" (see .env.example).
@@ -455,7 +471,7 @@ services:
       PORT: 3000
       HAMSTR_DATA: /data
       HAMSTR_HOST: ${HAMSTR_HOST:-hamstr.example.com}
-      HAMSTR_GRAIN_DOMAIN: ${HAMSTR_GRAIN_DOMAIN:-example.com}
+      HAMSTR_CRUMB_DOMAIN: ${HAMSTR_CRUMB_DOMAIN:-example.com}
       HAMSTR_SCHEME: https
       # The Hamstr Store it gets apps from: the one in this stack by default, or
       # any other (HAMSTR_STORE=https://store.hamstr.app in .env).
@@ -503,12 +519,12 @@ services:
       - 'traefik.http.routers.hamstr.rule=Host(`${HAMSTR_HOST:-hamstr.example.com}`)'
       - 'traefik.http.routers.hamstr.priority=20'
       - 'traefik.http.routers.hamstr.service=hamstr'
-      # Every grain hostname (grain-<12 chars>.<domain>) goes to Hamstr, never
+      # Every crumb hostname (crumb-<12 chars>.<domain>) goes to Hamstr, never
       # straight to celld. Above celld-sites (10) and static-host's catch-all (1).
-      - 'traefik.http.routers.hamstr-grains.rule=${HAMSTR_GRAINS_RULE:-Host(`hamstr-grains.invalid`)}'
-      - 'traefik.http.routers.hamstr-grains.ruleSyntax=v3'
-      - 'traefik.http.routers.hamstr-grains.priority=20'
-      - 'traefik.http.routers.hamstr-grains.service=hamstr'
+      - 'traefik.http.routers.hamstr-crumbs.rule=${HAMSTR_CRUMBS_RULE:-Host(`hamstr-crumbs.invalid`)}'
+      - 'traefik.http.routers.hamstr-crumbs.ruleSyntax=v3'
+      - 'traefik.http.routers.hamstr-crumbs.priority=20'
+      - 'traefik.http.routers.hamstr-crumbs.service=hamstr'
       - 'traefik.http.services.hamstr.loadbalancer.server.port=3000'
 
   # tsidp: a Tailscale-backed OIDC provider ("Sign in with Tailscale") for the

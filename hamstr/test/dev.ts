@@ -1,6 +1,6 @@
 // Local playground: a celld dev node, a Hamstr Store with the example apps, a
 // mock IdP that signs you in as Ada (admin), and Hamstr on http://hamstr.localhost:PORT.
-// Browsers resolve *.localhost to 127.0.0.1, so grain hosts work too.
+// Browsers resolve *.localhost to 127.0.0.1, so crumb hosts work too.
 //
 //   node hamstr/test/dev.ts          (Ctrl+C to stop; everything is temporary)
 import { spawn } from "node:child_process";
@@ -45,7 +45,7 @@ await node.start();
 const hamstr = createHamstr({
 	dataDir: join(dir, "hamstr"),
 	shellHost: "hamstr.localhost",
-	grainDomain: "localhost",
+	crumbDomain: "localhost",
 	scheme: "http",
 	publicPort: PORT,
 	store: storeBase,
@@ -69,8 +69,8 @@ await hamstr.listen(PORT, "127.0.0.1");
 	const api = (method, path, json) => b.request(method, path, { host: shell, headers: { origin: `http://${shell}:${PORT}` }, json });
 	await api("POST", "/api/apps", { id: "examples/pinboard" });
 	// Pinboard is single-instance: Home opens (and on first use, makes) Ada's one board.
-	const board = (await api("POST", "/api/apps/pinboard/open", {})).json.grain;
-	const enter = new URL((await api("POST", `/api/grains/${board.id}/open`, { path: "/" })).json.url);
+	const board = (await api("POST", "/api/apps/pinboard/open", {})).json.crumb;
+	const enter = new URL((await api("POST", `/api/crumbs/${board.id}/open`, { path: "/" })).json.url);
 	const host = enter.hostname;
 	await b.request("GET", enter.pathname + enter.search, { host });
 	const form = { "content-type": "application/x-www-form-urlencoded", "sec-fetch-site": "same-origin" };

@@ -79,7 +79,7 @@ describe("zone records", () => {
 
 	test("unknown names and other zones", async () => {
 		assert.equal(await dnsCode(resolver.resolve4("nobody.hamstr.test")), "ENOTFOUND");
-		assert.equal(await dnsCode(resolver.resolve4("grain-1.nobody.hamstr.test")), "ENOTFOUND");
+		assert.equal(await dnsCode(resolver.resolve4("crumb-1.nobody.hamstr.test")), "ENOTFOUND");
 		assert.equal(await dnsCode(resolver.resolve4("example.com")), "EREFUSED");
 	});
 });
@@ -119,7 +119,7 @@ describe("install lifecycle", () => {
 		assert.equal(res.status, 200);
 		assert.equal((await res.json()).ipv4, "100.64.0.10");
 
-		for (const name of [install.hostname, `grain-abc.${install.hostname}`, `a.b.${install.hostname}`]) {
+		for (const name of [install.hostname, `crumb-abc.${install.hostname}`, `a.b.${install.hostname}`]) {
 			assert.deepEqual(await resolver.resolve4(name), ["100.64.0.10"], name);
 			assert.deepEqual(await resolver.resolve6(name), ["fd7a:115c:a1e0::1"], name);
 		}

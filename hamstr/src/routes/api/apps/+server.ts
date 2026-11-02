@@ -3,9 +3,9 @@ import { guard, json, readJson, requireSameOrigin, requireUser } from "#lib/serv
 export const GET = guard(async (event) => {
 	const c = event.locals.core;
 	requireUser(event);
-	const counts = new Map(c.db.prepare("SELECT slug, COUNT(*) AS n FROM grains GROUP BY slug").all().map((r) => [r.slug, r.n]));
+	const counts = new Map(c.db.prepare("SELECT slug, COUNT(*) AS n FROM crumbs GROUP BY slug").all().map((r) => [r.slug, r.n]));
 	const apps = c.db.prepare("SELECT * FROM apps ORDER BY name COLLATE NOCASE").all();
-	return json(c, 200, { apps: apps.map((a) => c.appJson(a, { grains: counts.get(a.slug) ?? 0 })) });
+	return json(c, 200, { apps: apps.map((a) => c.appJson(a, { crumbs: counts.get(a.slug) ?? 0 })) });
 });
 
 export const POST = guard(async (event) => {

@@ -4,14 +4,14 @@
 
 ## Tiles
 
-- A tile opens the app's page: your grains of it, plus a **New** tile.
-- An app with `"instances": "single"` opens its one grain directly; the first open creates it.
+- A tile opens the app's page: your crumbs of it, plus a **New** tile.
+- An app with `"instances": "single"` opens its one crumb directly; the first open creates it.
 - A tile's menu (hover, or the ⋯ button) has the app's actions: download data, backups, details.
-- A new grain is called "Untitled …" until you rename it in the title bar.
+- A new crumb is called "Untitled …" until you rename it in the title bar.
 
-## A grain
+## A crumb
 
-Inside a grain you see the app, with Hamstr's title bar. From there:
+Inside a crumb you see the app, with Hamstr's title bar. From there:
 
 | Action | Where |
 | --- | --- |
@@ -22,11 +22,11 @@ Inside a grain you see the app, with Hamstr's title bar. From there:
 | Delete | the item's menu; it goes to the trash first, where supported |
 | Open in a new tab | the title bar |
 
-Deleting a grain deletes its data. There is no undo once the trash is emptied.
+Deleting a crumb deletes its data. There is no undo once the trash is emptied.
 
 ## Things to know
 
-- **Grains are private.** Only you can list, open or download them. There are no share links.
+- **Crumbs are private.** Only you can list, open or download them. There are no share links.
 - **Apps run in an iframe** inside the shell, and can also open in their own tab.
 - **Offline apps wake up.** An app you have not opened in months starts when you open it; the first open may take a
   moment.

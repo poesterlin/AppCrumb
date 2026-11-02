@@ -5,12 +5,12 @@ export function load({ locals, params }) {
 	const me = locals.user;
 	const app = c.q.app.get(params.slug);
 	if (!app) return { missing: true };
-	const rows = c.db.prepare("SELECT * FROM grains WHERE owner_id = ? AND slug = ? ORDER BY COALESCE(opened_at, created_at) DESC").all(me.id, app.slug);
-	const mine = (g) => c.grainJson(g, c.accessFor(g, { userId: me.id }));
+	const rows = c.db.prepare("SELECT * FROM crumbs WHERE owner_id = ? AND slug = ? ORDER BY COALESCE(opened_at, created_at) DESC").all(me.id, app.slug);
+	const mine = (g) => c.crumbJson(g, c.accessFor(g, { userId: me.id }));
 	return {
 		admin: c.isAdmin(me),
 		app: c.appJson(app),
 		mine: rows.filter((g) => !g.trashed_at).map(mine),
-		trash: rows.filter((g) => g.trashed_at).map((g) => c.grainJson(g, null)),
+		trash: rows.filter((g) => g.trashed_at).map((g) => c.crumbJson(g, null)),
 	};
 }

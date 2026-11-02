@@ -12,18 +12,18 @@
 
 	const me = $derived(data.me);
 	const path = $derived(page.url.pathname);
-	const grainMode = $derived(/^\/g\/[a-z0-9]{12}$/.test(path));
+	const crumbMode = $derived(/^\/c\/[a-z0-9]{12}$/.test(path));
 	// App pages (/a/<slug>) belong to Home.
 	const tab = $derived({ "": "home", a: "home" }[path.split("/")[1]] ?? path.split("/")[1]);
 
 	$effect(() => {
-		document.body.className = grainMode ? "grain-mode" : "";
+		document.body.className = crumbMode ? "crumb-mode" : "";
 		return () => (document.body.className = "");
 	});
 </script>
 
 {#if me}
-	{#if !grainMode}
+	{#if !crumbMode}
 		<ShellBar name={data.name} {me} pending={data.pending} {tab} />
 	{/if}
 

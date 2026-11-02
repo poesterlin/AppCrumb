@@ -9,11 +9,11 @@
 
 	let { data } = $props();
 
-	let confirming = $state(null); // the grain awaiting "delete forever"
+	let confirming = $state(null); // the crumb awaiting "delete forever"
 
 	async function restore(id) {
 		try {
-			await api(`/api/grains/${id}/restore`, { method: "POST", body: {} });
+			await api(`/api/crumbs/${id}/restore`, { method: "POST", body: {} });
 			toast("Restored");
 			await invalidateAll();
 		} catch (err) {
@@ -21,11 +21,11 @@
 		}
 	}
 
-	async function remove(grain, event) {
+	async function remove(crumb, event) {
 		const button = event.currentTarget;
 		button.disabled = true;
 		try {
-			await api(`/api/grains/${grain.id}`, { method: "DELETE" });
+			await api(`/api/crumbs/${crumb.id}`, { method: "DELETE" });
 			confirming = null;
 			toast("Deleted");
 			await invalidateAll();
@@ -48,15 +48,15 @@
 		</div>
 		{#if data.trash.length}
 			<div class="rows">
-				{#each data.trash as grain (grain.id)}
-					<div class="row" data-id={grain.id}>
-						<AppIcon app={grain.app} />
+				{#each data.trash as crumb (crumb.id)}
+					<div class="row" data-id={crumb.id}>
+						<AppIcon app={crumb.app} />
 						<div class="grow">
-							<strong>{grain.title}</strong>
-							<div class="dim small">{grain.app.name} · trashed {timeAgo(grain.trashedAt)}</div>
+							<strong>{crumb.title}</strong>
+							<div class="dim small">{crumb.app.name} · trashed {timeAgo(crumb.trashedAt)}</div>
 						</div>
-						<button type="button" class="button ghost small" onclick={() => restore(grain.id)}>Restore</button>
-						<button type="button" class="button danger small" onclick={() => (confirming = grain)}>Delete forever</button>
+						<button type="button" class="button ghost small" onclick={() => restore(crumb.id)}>Restore</button>
+						<button type="button" class="button danger small" onclick={() => (confirming = crumb)}>Delete forever</button>
 					</div>
 				{/each}
 			</div>

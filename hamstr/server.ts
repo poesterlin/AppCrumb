@@ -1,22 +1,22 @@
 // Hamstr: a personal app platform in the spirit of Sandstorm, on a celld node.
 //
-// The UI, the JSON API and the grain proxy are a SvelteKit app (src/). This
+// The UI, the JSON API and the crumb proxy are a SvelteKit app (src/). This
 // file is the HTTP entrypoint: it gives SvelteKit's Node handler a request per
 // connection, one core (SQLite, config, celld client) per instance, and the
 // process-level timeouts and logging.
 //
 // One process answers two kinds of hostname:
 //   HAMSTR_HOST            the shell: UI, JSON API, sign-in
-//   grain-<id>.<domain>    a grain: /.hamstr/enter, then everything is proxied
+//   crumb-<id>.<domain>    a crumb: /.hamstr/enter, then everything is proxied
 // In home mode (HAMSTR_AUTH=none) the shell answers on any hostname, and each
-// grain has a port of its own instead (HAMSTR_GRAIN_PORTS) on every interface.
+// crumb has a port of its own instead (HAMSTR_CRUMB_PORTS) on every interface.
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { createInstanceCore, runWithCore } from "./lib/instance.ts";
-import { grainRequest } from "./lib/proxy.ts";
+import { crumbRequest } from "./lib/proxy.ts";
 
 export { siteOf } from "./lib/site.ts";
 
@@ -40,8 +40,8 @@ function handler() {
 
 const HEALTH = '{"ok":true}';
 
-/** Answer one grain-host request with the proxy, bridging Node's streams. */
-async function serveGrain(core, grainId, req, res, browserHost = "") {
+/** Answer one crumb-host request with the proxy, bridging Node's streams. */
+async function serveCrumb(core, crumbId, req, res, browserHost = "") {
 	const hasBody = req.method !== "GET" && req.method !== "HEAD";
 	const url = new URL(`${core.config.scheme}://${req.headers.host}${req.url ?? "/"}`);
 	const request = new Request(url, {
@@ -50,7 +50,7 @@ async function serveGrain(core, grainId, req, res, browserHost = "") {
 		body: hasBody ? (Readable.toWeb(req) as any) : undefined,
 		duplex: "half"
 	} as any);
-	const response = await grainRequest({ request, url, locals: { core, browserHost } }, grainId);
+	const response = await crumbRequest({ request, url, locals: { core, browserHost } }, crumbId);
 	const headers = {};
 	for (const [key, value] of response.headers) if (key !== "set-cookie") headers[key] = value;
 	const cookies = response.headers.getSetCookie();
@@ -63,30 +63,30 @@ async function serveGrain(core, grainId, req, res, browserHost = "") {
 	}
 }
 
-/** A failed grain request: 502 if nothing was sent yet, else drop the connection. */
-const grainFailed = (res) => (err) => {
-	console.error("hamstr: grain request failed", err);
+/** A failed crumb request: 502 if nothing was sent yet, else drop the connection. */
+const crumbFailed = (res) => (err) => {
+	console.error("hamstr: crumb request failed", err);
 	if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }).end("bad gateway\n");
 	else res.destroy();
 };
 
-/** Home mode: one listener per grain port. The port alone names the grain; the
- *  browser's Host is kept for the grain's origin and the shell link. */
-function grainServers(core, listenHost) {
+/** Home mode: one listener per crumb port. The port alone names the crumb; the
+ *  browser's Host is kept for the crumb's origin and the shell link. */
+function crumbServers(core, listenHost) {
 	const servers = new Map();
 	function open(id, port) {
 		if (servers.has(id)) return;
 		const server = createServer((req, res) => {
 			const started = Date.now();
 			const browserHost = String(req.headers.host ?? "").toLowerCase();
-			req.headers.host = core.grainHost(id);
+			req.headers.host = core.crumbHost(id);
 			res.on("finish", () => {
 				if (core.config.logging) console.log(`${req.method} :${port}${(req.url ?? "/").split("?")[0]} ${res.statusCode} ${Date.now() - started}ms`);
 			});
-			runWithCore(core, () => serveGrain(core, id, req, res, browserHost)).catch(grainFailed(res));
+			runWithCore(core, () => serveCrumb(core, id, req, res, browserHost)).catch(crumbFailed(res));
 		});
 		server.headersTimeout = 15_000;
-		server.on("error", (err) => console.error(`hamstr: grain ${id} cannot listen on port ${port}: ${err.message}`));
+		server.on("error", (err) => console.error(`hamstr: crumb ${id} cannot listen on port ${port}: ${err.message}`));
 		server.listen(port, listenHost);
 		servers.set(id, server);
 	}
@@ -103,7 +103,7 @@ function grainServers(core, listenHost) {
 export function createHamstr(options: any = {}) {
 	let core;
 	let server;
-	let grains;
+	let crumbs;
 
 	// The core is built by the SvelteKit build's own module instance, after the
 	// handler has loaded, so routes and their errors share one set of classes.
@@ -151,12 +151,12 @@ export function createHamstr(options: any = {}) {
 					if (core.config.logging) console.log(`${req.method} ${host}${pathname} ${res.statusCode} ${Date.now() - started}ms`);
 				});
 
-				// Grain hosts are proxied here, before SvelteKit: its CSRF check
-				// runs before hooks and would refuse the grains' own form posts.
-				// (vite dev skips that check, so hooks handles grains there.)
-				const grain = core.grainPattern.exec(host);
-				if (grain) {
-					runWithCore(core, () => serveGrain(core, grain[1], req, res)).catch(grainFailed(res));
+				// Crumb hosts are proxied here, before SvelteKit: its CSRF check
+				// runs before hooks and would refuse the crumbs' own form posts.
+				// (vite dev skips that check, so hooks handles crumbs there.)
+				const crumb = core.crumbPattern.exec(host);
+				if (crumb) {
+					runWithCore(core, () => serveCrumb(core, crumb[1], req, res)).catch(crumbFailed(res));
 					return;
 				}
 
@@ -184,15 +184,15 @@ export function createHamstr(options: any = {}) {
 				});
 			});
 			if (core.home) {
-				grains = grainServers(core, options.grainListenHost ?? process.env.HAMSTR_GRAIN_LISTEN ?? "0.0.0.0");
-				core.portHooks.open = grains.open;
-				core.portHooks.close = grains.close;
-				for (const { id, port } of core.grainPorts()) grains.open(id, port);
+				crumbs = crumbServers(core, options.crumbListenHost ?? process.env.HAMSTR_CRUMB_LISTEN ?? "0.0.0.0");
+				core.portHooks.open = crumbs.open;
+				core.portHooks.close = crumbs.close;
+				for (const { id, port } of core.crumbPorts()) crumbs.open(id, port);
 			}
 			return server.address() as AddressInfo;
 		},
 		async close() {
-			grains?.closeAll();
+			crumbs?.closeAll();
 			server?.closeAllConnections?.();
 			if (server) await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
 			await ready.catch(() => {});
@@ -206,8 +206,8 @@ if (isMain) {
 	const app = createHamstr();
 	const address = await app.listen();
 	const where = typeof address === "object" && address ? `${address.address}:${address.port}` : String(address);
-	const grains = app.core.home ? `home mode: no sign-in, grains on ports ${app.config.grainPorts}` : `shell ${app.config.shellHost}, grains ${app.config.grainPrefix}*.${app.config.grainDomain}`;
-	console.log(`hamstr: http://${where} (${grains})`);
+	const crumbs = app.core.home ? `home mode: no sign-in, crumbs on ports ${app.config.crumbPorts}` : `shell ${app.config.shellHost}, crumbs ${app.config.crumbPrefix}*.${app.config.crumbDomain}`;
+	console.log(`hamstr: http://${where} (${crumbs})`);
 	const stop = async (signal) => {
 		console.log(`hamstr: ${signal}, shutting down`);
 		await app.close();

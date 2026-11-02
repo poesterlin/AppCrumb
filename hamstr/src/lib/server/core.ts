@@ -1,5 +1,5 @@
 // Hamstr's core: configuration, the SQLite store, the access model, the Hamstr
-// Store client, tickets and grain sessions. The SvelteKit routes and hooks are
+// Store client, tickets and crumb sessions. The SvelteKit routes and hooks are
 // thin layers over this module; it has no SvelteKit imports, so the test
 // harness (and any plain Node script) can drive it directly.
 import { createHash, createHmac, randomBytes } from "node:crypto";
@@ -17,10 +17,10 @@ export { AuthError, CelldError, ManifestError, BundleError, safePath };
 
 const NAME = "Hamstr";
 const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
-const GRAIN_SESSION_MS = 12 * 60 * 60 * 1000;
+const CRUMB_SESSION_MS = 12 * 60 * 60 * 1000;
 const TICKET_MS = 60 * 1000;
 const TRASH_MS = 30 * 24 * 60 * 60 * 1000;
-const MAX_GRAINS_PER_USER = 500;
+const MAX_CRUMBS_PER_USER = 500;
 /** Largest backup Hamstr accepts for a restore or an import. */
 const MAX_BACKUP_BYTES = 1024 * 1024 * 1024;
 const BACKUP_EXTENSION = "hamstr-backup";
@@ -88,8 +88,8 @@ export interface CoreOptions {
 	listenHost?: string;
 	dataDir?: string;
 	shellHost?: string;
-	grainDomain?: string;
-	grainPrefix?: string;
+	crumbDomain?: string;
+	crumbPrefix?: string;
 	scheme?: string;
 	publicPort?: string | number;
 	store?: string;
@@ -105,12 +105,12 @@ export interface CoreOptions {
 	authKey?: string;
 	/** Before accounts: who was an admin (HAMSTR_ADMINS). Only read to import existing people. */
 	admins?: string[];
-	grainCookieMode?: string;
-	/** "none": home mode. No sign-in: every request is the owner, and each grain
-	 *  gets its own port (grainPorts) instead of its own hostname. */
+	crumbCookieMode?: string;
+	/** "none": home mode. No sign-in: every request is the owner, and each crumb
+	 *  gets its own port (crumbPorts) instead of its own hostname. */
 	auth?: string;
-	/** Home mode: the port range for grains, e.g. "20000-20999". */
-	grainPorts?: string;
+	/** Home mode: the port range for crumbs, e.g. "20000-20999". */
+	crumbPorts?: string;
 	sitesApi?: string;
 	logging?: boolean;
 }
@@ -122,8 +122,8 @@ export function createCore(options: CoreOptions = {}) {
 		host: options.listenHost ?? env.HOST ?? "0.0.0.0",
 		dataDir: resolve(options.dataDir ?? env.HAMSTR_DATA ?? "/data"),
 		shellHost: String(options.shellHost ?? env.HAMSTR_HOST ?? "hamstr.localhost").toLowerCase(),
-		grainDomain: String(options.grainDomain ?? env.HAMSTR_GRAIN_DOMAIN ?? "localhost").toLowerCase().replace(/^\.+/, ""),
-		grainPrefix: options.grainPrefix ?? env.HAMSTR_GRAIN_PREFIX ?? "grain-",
+		crumbDomain: String(options.crumbDomain ?? env.HAMSTR_CRUMB_DOMAIN ?? "localhost").toLowerCase().replace(/^\.+/, ""),
+		crumbPrefix: options.crumbPrefix ?? env.HAMSTR_CRUMB_PREFIX ?? "crumb-",
 		scheme: options.scheme ?? env.HAMSTR_SCHEME ?? "https",
 		publicPort: String(options.publicPort ?? env.HAMSTR_PUBLIC_PORT ?? ""),
 		store: strip(options.store ?? env.HAMSTR_STORE ?? "http://store:3000"),
@@ -142,14 +142,14 @@ export function createCore(options: CoreOptions = {}) {
 		authKey: options.authKey ?? env.AUTH_KEY ?? "",
 		admins: options.admins ?? list(env.HAMSTR_ADMINS),
 		auth: String(options.auth ?? env.HAMSTR_AUTH ?? "required"),
-		grainPorts: String(options.grainPorts ?? env.HAMSTR_GRAIN_PORTS ?? "20000-20999"),
+		crumbPorts: String(options.crumbPorts ?? env.HAMSTR_CRUMB_PORTS ?? "20000-20999"),
 		logging: options.logging !== false,
 	};
 	if (!["required", "none"].includes(config.auth)) throw new Error('HAMSTR_AUTH must be "required" or "none"');
 	const home = config.auth === "none";
-	const portRange = /^(\d+)-(\d+)$/.exec(config.grainPorts);
+	const portRange = /^(\d+)-(\d+)$/.exec(config.crumbPorts);
 	if (!portRange || Number(portRange[1]) < 1024 || Number(portRange[2]) > 65535 || Number(portRange[1]) > Number(portRange[2])) {
-		throw new Error('HAMSTR_GRAIN_PORTS must be a range like "20000-20999"');
+		throw new Error('HAMSTR_CRUMB_PORTS must be a range like "20000-20999"');
 	}
 	const [firstPort, lastPort] = [Number(portRange[1]), Number(portRange[2])];
 	for (const [key, value] of [
@@ -160,25 +160,25 @@ export function createCore(options: CoreOptions = {}) {
 		if (!value) throw new Error(`${key} is required`);
 	}
 	if (config.authKey && config.authKey.length < 32) throw new Error("AUTH_KEY must be at least 32 characters");
-	if (!/^[a-z0-9-]+$/.test(config.grainPrefix)) throw new Error("HAMSTR_GRAIN_PREFIX must be lowercase letters, digits and dashes");
+	if (!/^[a-z0-9-]+$/.test(config.crumbPrefix)) throw new Error("HAMSTR_CRUMB_PREFIX must be lowercase letters, digits and dashes");
 
 	const secure = config.scheme === "https";
 	const portSuffix = config.publicPort ? `:${config.publicPort}` : "";
 	const shellOrigin = `${config.scheme}://${config.shellHost}${portSuffix}`;
-	const grainHost = (id) => `${config.grainPrefix}${id}.${config.grainDomain}`;
-	const grainOrigin = (id) => `${config.scheme}://${grainHost(id)}${portSuffix}`;
-	const grainPattern = new RegExp(`^${config.grainPrefix}([a-z0-9]{12})\\.${config.grainDomain.replace(/[.]/g, "\\.")}$`);
+	const crumbHost = (id) => `${config.crumbPrefix}${id}.${config.crumbDomain}`;
+	const crumbOrigin = (id) => `${config.scheme}://${crumbHost(id)}${portSuffix}`;
+	const crumbPattern = new RegExp(`^${config.crumbPrefix}([a-z0-9]{12})\\.${config.crumbDomain.replace(/[.]/g, "\\.")}$`);
 	const SHELL_COOKIE = secure ? "__Host-hamstr" : "hamstr";
-	const GRAIN_COOKIE = secure ? "__Host-hamstr_grain" : "hamstr_grain";
+	const CRUMB_COOKIE = secure ? "__Host-hamstr_crumb" : "hamstr_crumb";
 	const cookieAttrs = `Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
-	// The grain cookie is set and sent inside the shell's iframe. When the shell
-	// and the grains share a site (hamstr.example.com, grain-x.example.com) a Lax
-	// cookie works. On another site (a separate grain domain, or *.localhost,
+	// The crumb cookie is set and sent inside the shell's iframe. When the shell
+	// and the crumbs share a site (hamstr.example.com, crumb-x.example.com) a Lax
+	// cookie works. On another site (a separate crumb domain, or *.localhost,
 	// where every name is its own site) it is a third-party cookie, so it is
 	// partitioned to the shell instead (CHIPS: Chrome, Edge, Firefox).
-	const sameSite = siteOf(config.shellHost) === siteOf(`${config.grainPrefix}x.${config.grainDomain}`);
-	const grainCookieMode = options.grainCookieMode ?? env.HAMSTR_GRAIN_COOKIE ?? (sameSite ? "lax" : "partitioned");
-	const grainCookieAttrs = grainCookieMode === "lax" ? cookieAttrs : "Path=/; HttpOnly; SameSite=None; Secure; Partitioned";
+	const sameSite = siteOf(config.shellHost) === siteOf(`${config.crumbPrefix}x.${config.crumbDomain}`);
+	const crumbCookieMode = options.crumbCookieMode ?? env.HAMSTR_CRUMB_COOKIE ?? (sameSite ? "lax" : "partitioned");
+	const crumbCookieAttrs = crumbCookieMode === "lax" ? cookieAttrs : "Path=/; HttpOnly; SameSite=None; Secure; Partitioned";
 
 	mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
 	const tmpDir = join(config.dataDir, "tmp");
@@ -191,6 +191,21 @@ export function createCore(options: CoreOptions = {}) {
 	// --- database ----------------------------------------------------------------
 	const db = new DatabaseSync(join(config.dataDir, "hamstr.db"));
 	db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+	// Grains → crumbs (tables/columns). Before CREATE, so we do not end up with
+	// an empty crumbs table beside a leftover grains one.
+	{
+		const hasTable = (name: string) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+		const hasColumn = (table: string, column: string) =>
+			Boolean(db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column));
+		const renameColumn = (table: string, from: string, to: string) => {
+			if (hasTable(table) && hasColumn(table, from) && !hasColumn(table, to)) db.exec(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`);
+		};
+		if (hasTable("grains") && !hasTable("crumbs")) db.exec("ALTER TABLE grains RENAME TO crumbs");
+		if (hasTable("grain_ports") && !hasTable("crumb_ports")) db.exec("ALTER TABLE grain_ports RENAME TO crumb_ports");
+		if (hasTable("grain_sessions") && !hasTable("crumb_sessions")) db.exec("ALTER TABLE grain_sessions RENAME TO crumb_sessions");
+		for (const table of ["tickets", "crumb_ports", "crumb_sessions"]) renameColumn(table, "grain_id", "crumb_id");
+		db.exec("DROP INDEX IF EXISTS grains_owner");
+	}
 	db.exec(`
 		CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY, sub TEXT UNIQUE NOT NULL, name TEXT NOT NULL, email TEXT, login TEXT,
@@ -204,29 +219,29 @@ export function createCore(options: CoreOptions = {}) {
 			slug TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT NOT NULL, summary TEXT NOT NULL, version TEXT NOT NULL,
 			code_version TEXT NOT NULL, bundle_sha TEXT NOT NULL, manifest TEXT NOT NULL, installed_by TEXT,
 			installed_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-		CREATE TABLE IF NOT EXISTS grains (
+		CREATE TABLE IF NOT EXISTS crumbs (
 			id TEXT PRIMARY KEY, slug TEXT NOT NULL REFERENCES apps(slug), title TEXT NOT NULL,
 			owner_id TEXT NOT NULL REFERENCES users(id), code_version TEXT NOT NULL,
 			created_at TEXT NOT NULL, opened_at TEXT, trashed_at TEXT);
-		CREATE INDEX IF NOT EXISTS grains_owner ON grains(owner_id);
+		CREATE INDEX IF NOT EXISTS crumbs_owner ON crumbs(owner_id);
 		CREATE TABLE IF NOT EXISTS tickets (
-			hash TEXT PRIMARY KEY, grain_id TEXT NOT NULL, user_id TEXT, parent TEXT,
+			hash TEXT PRIMARY KEY, crumb_id TEXT NOT NULL, user_id TEXT, parent TEXT,
 			path TEXT NOT NULL, expires_at INTEGER NOT NULL);
-		CREATE TABLE IF NOT EXISTS grain_ports (
-			grain_id TEXT PRIMARY KEY REFERENCES grains(id) ON DELETE CASCADE, port INTEGER UNIQUE NOT NULL);
-		CREATE TABLE IF NOT EXISTS grain_sessions (
-			hash TEXT PRIMARY KEY, grain_id TEXT NOT NULL REFERENCES grains(id) ON DELETE CASCADE,
+		CREATE TABLE IF NOT EXISTS crumb_ports (
+			crumb_id TEXT PRIMARY KEY REFERENCES crumbs(id) ON DELETE CASCADE, port INTEGER UNIQUE NOT NULL);
+		CREATE TABLE IF NOT EXISTS crumb_sessions (
+			hash TEXT PRIMARY KEY, crumb_id TEXT NOT NULL REFERENCES crumbs(id) ON DELETE CASCADE,
 			user_id TEXT, parent TEXT, public_id TEXT NOT NULL,
 			created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
 	`);
 	// Share links were removed: drop their tables and columns from databases that
 	// still have them (new databases never create them). Tickets are short-lived,
-	// so dropping share_id from them and from grain_sessions loses nothing.
+	// so dropping share_id from them and from crumb_sessions loses nothing.
 	if (Number(db.prepare("PRAGMA user_version").get()?.user_version ?? 0) < 1) {
 		db.exec("BEGIN IMMEDIATE");
 		try {
 			db.exec("DROP TABLE IF EXISTS members; DROP TABLE IF EXISTS shares;");
-			for (const table of ["tickets", "grain_sessions"]) {
+			for (const table of ["tickets", "crumb_sessions"]) {
 				if (db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = 'share_id'`).get()) db.exec(`ALTER TABLE ${table} DROP COLUMN share_id`);
 			}
 			db.exec("PRAGMA user_version = 1");
@@ -241,7 +256,7 @@ export function createCore(options: CoreOptions = {}) {
 	if (!db.prepare("SELECT 1 FROM pragma_table_info('apps') WHERE name = 'store_id'").get()) db.exec("ALTER TABLE apps ADD COLUMN store_id TEXT");
 	// --- accounts ---------------------------------------------------------------------
 	// People, groups, sign-in providers, invites and sessions live in their own
-	// database (lib/auth); this one keeps a users row per person for the grains.
+	// database (lib/auth); this one keeps a users row per person for the crumbs.
 	const accounts = createAccounts({
 		origin: shellOrigin,
 		base: "/auth",
@@ -249,7 +264,7 @@ export function createCore(options: CoreOptions = {}) {
 		key: config.authKey || undefined,
 		dbPath: join(config.dataDir, "auth.db"),
 		celld: { call: (method, path, body) => celld.call(method, path, body) },
-		hideSite: (site) => site.startsWith(config.grainPrefix),
+		hideSite: (site) => site.startsWith(config.crumbPrefix),
 	});
 	const seeded = seedAccounts();
 
@@ -270,7 +285,7 @@ export function createCore(options: CoreOptions = {}) {
 		const name = config.oidc.name || (/\.ts\.net\/?$/.test(issuer) ? "Tailscale" : new URL(issuer).hostname);
 		return accounts.saveProvider("setup", { kind: "oidc", name, issuer, clientId, clientSecret });
 	}
-	/** Same ids (their grains stay theirs), their identity at `pid`; the earliest
+	/** Same ids (their crumbs stay theirs), their identity at `pid`; the earliest
 	 *  becomes the owner, HAMSTR_ADMINS decides who else is an admin. */
 	function importLegacyPeople(pid: string) {
 		const hasOwner = () => accounts.people().some((p) => p.role === "owner");
@@ -302,7 +317,7 @@ export function createCore(options: CoreOptions = {}) {
 		userBySub: db.prepare("SELECT * FROM users WHERE sub = ?"),
 		app: db.prepare("SELECT * FROM apps WHERE slug = ?"),
 		appByStoreId: db.prepare("SELECT * FROM apps WHERE store_id = ?"),
-		grain: db.prepare("SELECT * FROM grains WHERE id = ?"),
+		crumb: db.prepare("SELECT * FROM crumbs WHERE id = ?"),
 	};
 
 	// --- identity --------------------------------------------------------------------
@@ -338,11 +353,11 @@ export function createCore(options: CoreOptions = {}) {
 
 	// --- apps and the access model ---------------------------------------------------
 	const manifestOf = (app) => (app ? JSON.parse(app.manifest) : null);
-	/** A grain belongs to its owner alone: they hold every permission the app
+	/** A crumb belongs to its owner alone: they hold every permission the app
 	 *  declares, and nobody else gets in. */
-	function accessFor(grain, { userId = null } = {}) {
-		if (!grain || grain.trashed_at || !userId || grain.owner_id !== userId) return null;
-		const manifest = manifestOf(q.app.get(grain.slug));
+	function accessFor(crumb, { userId = null } = {}) {
+		if (!crumb || crumb.trashed_at || !userId || crumb.owner_id !== userId) return null;
+		const manifest = manifestOf(q.app.get(crumb.slug));
 		return { role: "owner", permissions: (manifest?.permissions ?? []).map((p) => p.id), owner: true };
 	}
 
@@ -368,19 +383,21 @@ export function createCore(options: CoreOptions = {}) {
 			...extra,
 		};
 	}
-	function grainJson(grain, access, extra = {}) {
-		const app = q.app.get(grain.slug);
-		const owner = q.user.get(grain.owner_id);
+	// Renamed from grainJson; complexity unchanged.
+	// fallow-ignore-next-line complexity
+	function crumbJson(crumb, access, extra = {}) {
+		const app = q.app.get(crumb.slug);
+		const owner = q.user.get(crumb.owner_id);
 		return {
-			id: grain.id,
-			title: grain.title,
-			app: app ? { slug: app.slug, name: app.name, icon: app.icon } : { slug: grain.slug, name: grain.slug, icon: "" },
+			id: crumb.id,
+			title: crumb.title,
+			app: app ? { slug: app.slug, name: app.name, icon: app.icon } : { slug: crumb.slug, name: crumb.slug, icon: "" },
 			owner: { name: owner?.name ?? "someone" },
-			createdAt: grain.created_at,
-			openedAt: grain.opened_at,
-			trashedAt: grain.trashed_at,
-			// Home mode: the grain's port on whatever host the browser uses, so no fixed origin.
-			origin: home ? null : grainOrigin(grain.id),
+			createdAt: crumb.created_at,
+			openedAt: crumb.opened_at,
+			trashedAt: crumb.trashed_at,
+			// Home mode: the crumb's port on whatever host the browser uses, so no fixed origin.
+			origin: home ? null : crumbOrigin(crumb.id),
 			...(access && { role: access.role, permissions: access.permissions, isOwner: access.owner }),
 			...extra,
 		};
@@ -424,7 +441,7 @@ export function createCore(options: CoreOptions = {}) {
 	}
 
 	/** Install or update an app (`id` is the store's <publisher>/<app>); updates
-	 *  move every grain of it to the new code. Locally an app goes by its own
+	 *  move every crumb of it to the new code. Locally an app goes by its own
 	 *  name, so one Hamstr holds one app of each name. */
 	const installing = new Map();
 	async function install(id, { version, allowEgress, user }) {
@@ -465,7 +482,7 @@ export function createCore(options: CoreOptions = {}) {
 			const { file, sha } = await downloadBundle(config.store, storeId, release.version, release.bundleSha256, tmpDir);
 			let uploaded;
 			try {
-				uploaded = await celld.upload(file, { egress: newEgress, probeHost: `${config.grainPrefix}probe-${randomId(8)}.${config.grainDomain}` });
+				uploaded = await celld.upload(file, { egress: newEgress, probeHost: `${config.crumbPrefix}probe-${randomId(8)}.${config.crumbDomain}` });
 			} finally {
 				rmSync(file, { force: true });
 			}
@@ -479,20 +496,20 @@ export function createCore(options: CoreOptions = {}) {
 					"INSERT INTO apps (slug, store_id, name, icon, summary, version, code_version, bundle_sha, manifest, installed_by, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 				).run(slug, storeId, manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), user.id, stamp, stamp);
 			}
-			// Move existing grains. Their Durable Objects keep their data; migrations run on first use.
+			// Move existing crumbs. Their Durable Objects keep their data; migrations run on first use.
 			const failed = [];
 			let moved = 0;
-			for (const grain of db.prepare("SELECT * FROM grains WHERE slug = ?").all(slug)) {
-				if (grain.code_version === uploaded.version) continue;
+			for (const crumb of db.prepare("SELECT * FROM crumbs WHERE slug = ?").all(slug)) {
+				if (crumb.code_version === uploaded.version) continue;
 				try {
-					await celld.deployGrain(grainHost(grain.id), uploaded.version, newEgress);
-					db.prepare("UPDATE grains SET code_version = ? WHERE id = ?").run(uploaded.version, grain.id);
+					await celld.deployCrumb(crumbHost(crumb.id), uploaded.version, newEgress);
+					db.prepare("UPDATE crumbs SET code_version = ? WHERE id = ?").run(uploaded.version, crumb.id);
 					moved++;
 				} catch (err) {
-					failed.push({ id: grain.id, error: err.message });
+					failed.push({ id: crumb.id, error: err.message });
 				}
 			}
-			return { app: appJson(q.app.get(slug)), updatedGrains: moved, failedGrains: failed };
+			return { app: appJson(q.app.get(slug)), updatedCrumbs: moved, failedCrumbs: failed };
 		})();
 		installing.set(id, job);
 		try {
@@ -502,44 +519,46 @@ export function createCore(options: CoreOptions = {}) {
 		}
 	}
 
-	/** A new grain of an installed app, as its own celld site. */
-	async function createGrain(user: any, app: any, title = ""): Promise<any> {
-		if (Number(db.prepare("SELECT COUNT(*) AS n FROM grains WHERE owner_id = ?").get(user.id)?.n ?? 0) >= MAX_GRAINS_PER_USER) {
-			throw new HttpError(403, `you can have at most ${MAX_GRAINS_PER_USER} grains`);
+	/** A new crumb of an installed app, as its own celld site. */
+	// Renamed from createGrain; complexity unchanged.
+	// fallow-ignore-next-line complexity
+	async function createCrumb(user: any, app: any, title = ""): Promise<any> {
+		if (Number(db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE owner_id = ?").get(user.id)?.n ?? 0) >= MAX_CRUMBS_PER_USER) {
+			throw new HttpError(403, `you can have at most ${MAX_CRUMBS_PER_USER} crumbs`);
 		}
 		const id = randomId(12);
 		try {
-			await celld.deployGrain(grainHost(id), app.code_version, manifestOf(app).egress ?? []);
+			await celld.deployCrumb(crumbHost(id), app.code_version, manifestOf(app).egress ?? []);
 		} catch (err) {
-			await celld.deleteSite(grainHost(id)).catch(() => {});
+			await celld.deleteSite(crumbHost(id)).catch(() => {});
 			throw err;
 		}
 		const name = String(title).trim().slice(0, 80) || (manifestOf(app).instances === "single" ? app.name : `Untitled ${app.name}`);
-		db.prepare("INSERT INTO grains (id, slug, title, owner_id, code_version, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, app.slug, name, user.id, app.code_version, now());
-		return q.grain.get(id);
+		db.prepare("INSERT INTO crumbs (id, slug, title, owner_id, code_version, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, app.slug, name, user.id, app.code_version, now());
+		return q.crumb.get(id);
 	}
 
-	/** Open an app from the home screen. A single-instance app has one grain per
+	/** Open an app from the home screen. A single-instance app has one crumb per
 	 *  person: the newest one that is not in the trash, made on first open. */
 	const opening = new Map();
 	async function openApp(user, app) {
 		const find = () =>
-			db.prepare("SELECT * FROM grains WHERE owner_id = ? AND slug = ? AND trashed_at IS NULL ORDER BY created_at DESC LIMIT 1").get(user.id, app.slug);
+			db.prepare("SELECT * FROM crumbs WHERE owner_id = ? AND slug = ? AND trashed_at IS NULL ORDER BY created_at DESC LIMIT 1").get(user.id, app.slug);
 		const existing = find();
-		if (existing) return { grain: existing, created: false };
-		// Two taps (or two tabs) at once must not make two grains.
+		if (existing) return { crumb: existing, created: false };
+		// Two taps (or two tabs) at once must not make two crumbs.
 		const key = `${user.id}/${app.slug}`;
-		if (!opening.has(key)) opening.set(key, createGrain(user, app).finally(() => opening.delete(key)));
-		const grain = await opening.get(key);
-		return { grain, created: true };
+		if (!opening.has(key)) opening.set(key, createCrumb(user, app).finally(() => opening.delete(key)));
+		const crumb = await opening.get(key);
+		return { crumb, created: true };
 	}
 
 	// --- backups ---------------------------------------------------------------------
 	// A backup file is one header line (what it is a backup of) followed by celld's
-	// dump of the grain's objects: every table, row and stored key, so it works for
+	// dump of the crumb's objects: every table, row and stored key, so it works for
 	// every app, whether or not the app has an export of its own.
 	const tempFiles = new Set(); // in use: housekeeping leaves them alone
-	const restoring = new Set(); // grain ids: the proxy holds their traffic meanwhile
+	const restoring = new Set(); // crumb ids: the proxy holds their traffic meanwhile
 	const isRestoring = (id) => restoring.has(id);
 
 	function tempFile(kind) {
@@ -552,22 +571,24 @@ export function createCore(options: CoreOptions = {}) {
 		rmSync(file, { force: true });
 	}
 
-	/** Back a grain up into a temp file; the caller sends it and releases it. */
-	async function backupGrain(grain) {
-		const app = q.app.get(grain.slug);
+	/** Back a crumb up into a temp file; the caller sends it and releases it. */
+	// Renamed from backupGrain; complexity unchanged.
+	// fallow-ignore-next-line complexity
+	async function backupCrumb(crumb) {
+		const app = q.app.get(crumb.slug);
 		const file = tempFile("backup");
 		try {
 			const header = {
 				type: "hamstr-backup",
 				format: 1,
-				app: grain.slug,
-				appName: app?.name ?? grain.slug,
+				app: crumb.slug,
+				appName: app?.name ?? crumb.slug,
 				appVersion: app?.version ?? null,
-				title: grain.title,
+				title: crumb.title,
 				at: now(),
 			};
 			writeFileSync(file, `${JSON.stringify(header)}\n`, { mode: 0o600 });
-			const totals = await celld.dumpTo(grainHost(grain.id), file);
+			const totals = await celld.dumpTo(crumbHost(crumb.id), file);
 			return { file, header, totals };
 		} catch (err) {
 			releaseTemp(file);
@@ -604,16 +625,18 @@ export function createCore(options: CoreOptions = {}) {
 		}
 	}
 
-	/** Replace a grain's data with a backup file. A copy of its current data is
+	/** Replace a crumb's data with a backup file. A copy of its current data is
 	 *  taken first and put back if the restore fails half-way. */
-	async function restoreGrain(grain, file) {
-		const app = q.app.get(grain.slug);
+	// Renamed from restoreGrain; complexity unchanged.
+	// fallow-ignore-next-line complexity
+	async function restoreCrumb(crumb, file) {
+		const app = q.app.get(crumb.slug);
 		if (!app) throw new HttpError(409, "the app of this item is not installed");
 		const { header, offset } = readBackupHeader(file);
 		checkBackupFor(header, app);
-		if (restoring.has(grain.id)) throw new HttpError(409, "this item is already being restored");
-		const host = grainHost(grain.id);
-		restoring.add(grain.id);
+		if (restoring.has(crumb.id)) throw new HttpError(409, "this item is already being restored");
+		const host = crumbHost(crumb.id);
+		restoring.add(crumb.id);
 		const safety = tempFile("before-restore");
 		try {
 			try {
@@ -634,20 +657,22 @@ export function createCore(options: CoreOptions = {}) {
 			throw new HttpError(r.status === 429 ? 429 : 422, `the restore failed (${why}); nothing was changed`);
 		} finally {
 			releaseTemp(safety);
-			restoring.delete(grain.id);
+			restoring.delete(crumb.id);
 		}
 	}
 
-	/** Wipe a grain's data and start it empty again, on the app's current code.
+	/** Wipe a crumb's data and start it empty again, on the app's current code.
 	 *  The item keeps its id, title and place; everything it stored is gone. Like
 	 *  a restore it takes a safety copy first and puts the data back if it fails. */
-	async function resetGrain(grain) {
-		const app = q.app.get(grain.slug);
+	// Renamed from resetGrain; complexity unchanged.
+	// fallow-ignore-next-line complexity
+	async function resetCrumb(crumb) {
+		const app = q.app.get(crumb.slug);
 		if (!app) throw new HttpError(409, "the app of this item is not installed");
-		if (restoring.has(grain.id)) throw new HttpError(409, "this item is already being restored or reset");
-		const host = grainHost(grain.id);
+		if (restoring.has(crumb.id)) throw new HttpError(409, "this item is already being restored or reset");
+		const host = crumbHost(crumb.id);
 		const egress = manifestOf(app).egress ?? [];
-		restoring.add(grain.id);
+		restoring.add(crumb.id);
 		const safety = tempFile("before-reset");
 		try {
 			try {
@@ -657,10 +682,10 @@ export function createCore(options: CoreOptions = {}) {
 			}
 			try {
 				await celld.deleteSite(host);
-				await celld.deployGrain(host, String(app.code_version), egress);
+				await celld.deployCrumb(host, String(app.code_version), egress);
 			} catch (err) {
 				try {
-					await celld.deployGrain(host, grain.code_version, egress);
+					await celld.deployCrumb(host, crumb.code_version, egress);
 					const back = await celld.restoreFrom(host, safety);
 					if (back.status !== 200) throw new Error(back.json?.error ?? `status ${back.status}`);
 				} catch (backErr) {
@@ -668,121 +693,123 @@ export function createCore(options: CoreOptions = {}) {
 				}
 				throw new HttpError(502, `the reset failed (${err.message}); the item was put back as it was`);
 			}
-			db.prepare("UPDATE grains SET code_version = ? WHERE id = ?").run(app.code_version, grain.id);
+			db.prepare("UPDATE crumbs SET code_version = ? WHERE id = ?").run(app.code_version, crumb.id);
 		} finally {
 			releaseTemp(safety);
-			restoring.delete(grain.id);
+			restoring.delete(crumb.id);
 		}
 	}
 
-	/** A new grain of `app` made from a backup file. */
+	/** A new crumb of `app` made from a backup file. */
 	async function importBackup(user, app, file) {
 		const { header } = readBackupHeader(file);
 		checkBackupFor(header, app);
-		const grain = await createGrain(user, app, typeof header.title === "string" ? header.title : "");
+		const crumb = await createCrumb(user, app, typeof header.title === "string" ? header.title : "");
 		try {
-			const result = await restoreGrain(grain, file);
-			return { grain: q.grain.get(grain.id), ...result };
+			const result = await restoreCrumb(crumb, file);
+			return { crumb: q.crumb.get(crumb.id), ...result };
 		} catch (err) {
-			await purgeGrain(grain).catch(() => {});
+			await purgeCrumb(crumb).catch(() => {});
 			throw err;
 		}
 	}
 
-	async function purgeGrain(grain) {
-		await celld.deleteSite(grainHost(grain.id));
-		db.prepare("DELETE FROM grains WHERE id = ?").run(grain.id);
-		portHooks.close(grain.id);
+	async function purgeCrumb(crumb) {
+		await celld.deleteSite(crumbHost(crumb.id));
+		db.prepare("DELETE FROM crumbs WHERE id = ?").run(crumb.id);
+		portHooks.close(crumb.id);
 	}
 
 	/** What uninstalling an app would delete, as seen by `user`. */
 	function usage(slug, user) {
 		const row = db
-			.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(owner_id = ?), 0) AS mine, COUNT(DISTINCT owner_id) AS owners FROM grains WHERE slug = ?")
+			.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(owner_id = ?), 0) AS mine, COUNT(DISTINCT owner_id) AS owners FROM crumbs WHERE slug = ?")
 			.get(user.id, slug);
 		const total = Number(row.total);
 		const mine = Number(row.mine);
 		return { items: total, mine, others: total - mine, people: Number(row.owners) };
 	}
 
-	/** Remove an app for everyone. Its grains (with their data, trash included)
+	/** Remove an app for everyone. Its crumbs (with their data, trash included)
 	 *  go too, but only when `deleteItems` says so; a failed delete keeps the app. */
 	async function uninstall(slug, { deleteItems = false } = {}) {
 		const app = q.app.get(slug);
 		if (!app) throw new HttpError(404, "that app is not installed");
 		if (installing.has(slug)) throw new HttpError(409, `${app.name} is being installed or updated right now`);
-		const grains = db.prepare("SELECT * FROM grains WHERE slug = ?").all(slug);
-		if (grains.length && !deleteItems) {
-			throw new HttpError(409, `${app.name} still has ${grains.length} item${grains.length === 1 ? "" : "s"} (including the trash)`);
+		const crumbs = db.prepare("SELECT * FROM crumbs WHERE slug = ?").all(slug);
+		if (crumbs.length && !deleteItems) {
+			throw new HttpError(409, `${app.name} still has ${crumbs.length} item${crumbs.length === 1 ? "" : "s"} (including the trash)`);
 		}
 		const failed = [];
-		for (const grain of grains) {
+		for (const crumb of crumbs) {
 			try {
-				await purgeGrain(grain);
+				await purgeCrumb(crumb);
 			} catch (err) {
-				failed.push(grain.id);
-				console.error(`hamstr: deleting grain ${grain.id} failed`, err.message);
+				failed.push(crumb.id);
+				console.error(`hamstr: deleting crumb ${crumb.id} failed`, err.message);
 			}
 		}
 		if (failed.length) throw new HttpError(502, `${failed.length} item${failed.length === 1 ? "" : "s"} could not be deleted; ${app.name} stays installed, try again`);
 		db.prepare("DELETE FROM apps WHERE slug = ?").run(slug);
-		return { deleted: grains.length };
+		return { deleted: crumbs.length };
 	}
 
-	// --- tickets and grain sessions ----------------------------------------------------
-	/** Home mode: the grain's port, given out on first use and kept. */
-	function grainPort(id) {
-		const row = db.prepare("SELECT port FROM grain_ports WHERE grain_id = ?").get(id);
+	// --- tickets and crumb sessions ----------------------------------------------------
+	/** Home mode: the crumb's port, given out on first use and kept. */
+	function crumbPort(id) {
+		const row = db.prepare("SELECT port FROM crumb_ports WHERE crumb_id = ?").get(id);
 		if (row) return Number(row.port);
-		const taken = new Set(db.prepare("SELECT port FROM grain_ports").all().map((r) => Number(r.port)));
+		const taken = new Set(db.prepare("SELECT port FROM crumb_ports").all().map((r) => Number(r.port)));
 		let port = firstPort;
 		while (taken.has(port)) port++;
-		if (port > lastPort) throw new HttpError(503, `all ${lastPort - firstPort + 1} grain ports (${config.grainPorts}) are in use`);
-		db.prepare("INSERT INTO grain_ports (grain_id, port) VALUES (?, ?)").run(id, port);
+		if (port > lastPort) throw new HttpError(503, `all ${lastPort - firstPort + 1} crumb ports (${config.crumbPorts}) are in use`);
+		db.prepare("INSERT INTO crumb_ports (crumb_id, port) VALUES (?, ?)").run(id, port);
 		portHooks.open(id, port);
 		return port;
 	}
-	/** server.ts listens on grain ports; it sets these once it runs. */
+	/** server.ts listens on crumb ports; it sets these once it runs. */
 	const portHooks = { open: (_id: string, _port: number) => {}, close: (_id: string) => {} };
-	const grainPorts = () => db.prepare("SELECT grain_id AS id, port FROM grain_ports").all().map((r) => ({ id: String(r.id), port: Number(r.port) }));
+	const crumbPorts = () => db.prepare("SELECT crumb_id AS id, port FROM crumb_ports").all().map((r) => ({ id: String(r.id), port: Number(r.port) }));
 
-	/** Where the browser opens a grain. Normally a one-time ticket on the grain's
-	 *  hostname; in home mode the grain's port on the hostname the browser used
+	/** Where the browser opens a crumb. Normally a one-time ticket on the crumb's
+	 *  hostname; in home mode the crumb's port on the hostname the browser used
 	 *  for the shell (`host`), with no handshake: nobody signs in. */
-	function issueTicket(grain, { userId, parent = null, path = "/", host = "" }) {
+	function issueTicket(crumb, { userId, parent = null, path = "/", host = "" }) {
 		if (home) {
-			db.prepare("UPDATE grains SET opened_at = ? WHERE id = ?").run(now(), grain.id);
+			db.prepare("UPDATE crumbs SET opened_at = ? WHERE id = ?").run(now(), crumb.id);
 			const hostname = String(host).replace(/:\d+$/, "") || "localhost";
-			return `http://${hostname}:${grainPort(grain.id)}${safePath(path)}`;
+			return `http://${hostname}:${crumbPort(crumb.id)}${safePath(path)}`;
 		}
 		const value = token();
-		db.prepare("INSERT INTO tickets (hash, grain_id, user_id, parent, path, expires_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+		db.prepare("INSERT INTO tickets (hash, crumb_id, user_id, parent, path, expires_at) VALUES (?, ?, ?, ?, ?, ?)").run(
 			sha256(value),
-			grain.id,
+			crumb.id,
 			userId,
 			parent,
 			safePath(path),
 			Date.now() + TICKET_MS,
 		);
-		db.prepare("UPDATE grains SET opened_at = ? WHERE id = ?").run(now(), grain.id);
-		return `${grainOrigin(grain.id)}/.hamstr/enter?ticket=${encodeURIComponent(value)}`;
+		db.prepare("UPDATE crumbs SET opened_at = ? WHERE id = ?").run(now(), crumb.id);
+		return `${crumbOrigin(crumb.id)}/.hamstr/enter?ticket=${encodeURIComponent(value)}`;
 	}
 
-	/** The visitor behind a grain request, or null. Re-checked on every request,
-	 *  so revoking a link, trashing a grain or signing out takes effect at once. */
-	function grainVisitor(request, grain) {
+	/** The visitor behind a crumb request, or null. Re-checked on every request,
+	 *  so revoking a link, trashing a crumb or signing out takes effect at once. */
+	// Renamed from grainVisitor; complexity unchanged.
+	// fallow-ignore-next-line complexity
+	function crumbVisitor(request, crumb) {
 		if (home) {
-			// Everyone who reaches the grain's port is its owner.
-			const access = accessFor(grain, { userId: grain.owner_id });
+			// Everyone who reaches the crumb's port is its owner.
+			const access = accessFor(crumb, { userId: crumb.owner_id });
 			if (!access) return null;
-			return { gs: { public_id: createHmac("sha256", config.secret).update(`home:${grain.id}`).digest("hex").slice(0, 16) }, access, user: q.user.get(grain.owner_id) };
+			return { gs: { public_id: createHmac("sha256", config.secret).update(`home:${crumb.id}`).digest("hex").slice(0, 16) }, access, user: q.user.get(crumb.owner_id) };
 		}
-		const value = parseCookies(request.headers.get("cookie"))[GRAIN_COOKIE];
+		const value = parseCookies(request.headers.get("cookie"))[CRUMB_COOKIE];
 		if (!value || value.length > 200) return null;
-		const gs = db.prepare("SELECT * FROM grain_sessions WHERE hash = ? AND expires_at > ?").get(sha256(value), Date.now());
-		if (!gs || gs.grain_id !== grain.id) return null;
+		const gs = db.prepare("SELECT * FROM crumb_sessions WHERE hash = ? AND expires_at > ?").get(sha256(value), Date.now());
+		if (!gs || gs.crumb_id !== crumb.id) return null;
 		if (gs.parent && !accounts.sessionAlive(String(gs.parent))) return null;
-		const access = accessFor(grain, { userId: gs.user_id });
+		const access = accessFor(crumb, { userId: gs.user_id });
 		if (!access) return null;
 		return { gs, access, user: gs.user_id ? q.user.get(gs.user_id) : null };
 	}
@@ -791,14 +818,14 @@ export function createCore(options: CoreOptions = {}) {
 	async function housekeeping() {
 		const t = Date.now();
 		accounts.sweep();
-		db.prepare("DELETE FROM grain_sessions WHERE expires_at < ?").run(t);
+		db.prepare("DELETE FROM crumb_sessions WHERE expires_at < ?").run(t);
 		db.prepare("DELETE FROM tickets WHERE expires_at < ?").run(t);
 		const cutoff = new Date(t - TRASH_MS).toISOString();
-		for (const grain of db.prepare("SELECT * FROM grains WHERE trashed_at IS NOT NULL AND trashed_at < ?").all(cutoff)) {
+		for (const crumb of db.prepare("SELECT * FROM crumbs WHERE trashed_at IS NOT NULL AND trashed_at < ?").all(cutoff)) {
 			try {
-				await purgeGrain(grain);
+				await purgeCrumb(crumb);
 			} catch (err) {
-				console.error(`hamstr: purging grain ${grain.id} failed`, err.message);
+				console.error(`hamstr: purging crumb ${crumb.id} failed`, err.message);
 			}
 		}
 		for (const name of readdirSync(tmpDir)) {
@@ -820,30 +847,30 @@ export function createCore(options: CoreOptions = {}) {
 		tmpDir,
 		sitesApi,
 		shellOrigin,
-		grainHost,
-		grainOrigin,
-		grainPattern,
-		// Home mode: grains are other ports of whatever host the browser uses.
-		grainSources: home ? "http:" : `${config.scheme}://*.${config.grainDomain}${portSuffix}`,
+		crumbHost,
+		crumbOrigin,
+		crumbPattern,
+		// Home mode: crumbs are other ports of whatever host the browser uses.
+		crumbSources: home ? "http:" : `${config.scheme}://*.${config.crumbDomain}${portSuffix}`,
 		home,
-		grainPorts,
+		crumbPorts,
 		portHooks,
 		SHELL_COOKIE,
-		GRAIN_COOKIE,
+		CRUMB_COOKIE,
 		cookieAttrs,
-		grainCookieAttrs,
+		crumbCookieAttrs,
 		sessionCookie,
-		GRAIN_SESSION_MS,
+		CRUMB_SESSION_MS,
 		TICKET_MS,
 		TRASH_MS,
-		MAX_GRAINS_PER_USER,
+		MAX_CRUMBS_PER_USER,
 		MAX_BACKUP_BYTES,
 		BACKUP_EXTENSION,
 		tempFile,
 		releaseTemp,
-		backupGrain,
-		restoreGrain,
-		resetGrain,
+		backupCrumb,
+		restoreCrumb,
+		resetCrumb,
 		importBackup,
 		isRestoring,
 		sha256,
@@ -858,17 +885,17 @@ export function createCore(options: CoreOptions = {}) {
 		manifestOf,
 		accessFor,
 		appJson,
-		grainJson,
+		crumbJson,
 		storeJson,
 		storePath,
 		install,
-		createGrain,
+		createCrumb,
 		openApp,
-		purgeGrain,
+		purgeCrumb,
 		usage,
 		uninstall,
 		issueTicket,
-		grainVisitor,
+		crumbVisitor,
 		housekeeping,
 		close() {
 			clearInterval(timer);

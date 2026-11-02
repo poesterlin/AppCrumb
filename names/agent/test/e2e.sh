@@ -74,7 +74,7 @@ dig() { docker exec "$RUN-server" node -e "
 	const r = new (require('node:dns').promises.Resolver)(); r.setServers(['127.0.0.1:53']);
 	r.resolve('$1', '$2').then(v => console.log(JSON.stringify(v)), e => console.log(e.code));"; }
 dig "$HOST" A
-dig "grain-abc.$HOST" A
+dig "crumb-abc.$HOST" A
 dig "_acme-challenge.$HOST" TXT # cleaned up after validation: ENODATA
 
 echo "== certificate"

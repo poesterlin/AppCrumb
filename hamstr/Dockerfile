@@ -1,4 +1,4 @@
-# Hamstr: the shell and grain proxy. It holds the celld ADMIN_TOKEN and the
+# Hamstr: the shell and crumb proxy. It holds the celld ADMIN_TOKEN and the
 # PROXY_TOKEN, so it is LAN-only. Build context is the repo root: Hamstr uses
 # the shared app format (packages/app-format) and design system (packages/ui).
 #

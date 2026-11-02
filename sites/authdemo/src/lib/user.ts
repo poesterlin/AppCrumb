@@ -29,10 +29,10 @@ const list = (value: string | null) => (value ? value.split(',').filter(Boolean)
 /**
  * Reads the identity the platform puts on every request. The celld router sets
  * X-Celld-User-* on a site with `auth` (and strips them from the visitor's own
- * request); Hamstr's grain proxy sets X-Hamstr-* inside a grain (and overwrites
+ * request); Hamstr's crumb proxy sets X-Hamstr-* inside a crumb (and overwrites
  * them). Returns null when there is neither.
  *
- * Caveat: X-Hamstr-* is only trustworthy inside a grain. On a standalone site
+ * Caveat: X-Hamstr-* is only trustworthy inside a crumb. On a standalone site
  * with "auth": "required" nobody reaches the server without X-Celld-User-*,
  * which is checked first, so a forged X-Hamstr-* header gains nothing there.
  */
@@ -72,7 +72,7 @@ export function userFromHeaders(headers: Headers): User | null {
 /**
  * Who may open the admins-only page. celld: role owner or admin (set on the auth
  * service). Hamstr: the "admin" permission declared in hamstr.json, which the
- * owner of the grain holds.
+ * owner of the crumb holds.
  */
 export function isAdmin(user: User | null): boolean {
 	if (!user) return false;

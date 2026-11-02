@@ -140,7 +140,7 @@ data is yours" property.
 | `../packages/app-format/bundle.ts` | store, CLI, Hamstr | tar.gz validation: safe paths, regular files only, size caps, blob hash equality, `code.json` cross-check |
 | `cli/` | publisher/developer machine | the `hamstr` CLI (npm package `@hamstr/cli`, see [cli/README.md](cli/README.md)): register/login, publish (build + pack + upload), install into a celld node over its admin API or a compose stack, update/list/report. Needs no checkout of this repo |
 | `celld-demo` (compose) | separate node | disposable per-session copies for "Try it"; own bucket/token, no egress |
-| `test/fixtures/` | repo | apps the tests publish: `secret-santa` (one worker, one Durable Object) and `pinboard` (a Hamstr grain app). The demo apps (gym-log, bookmarks, …) live outside this repo |
+| `test/fixtures/` | repo | apps the tests publish: `secret-santa` (one worker, one Durable Object) and `pinboard` (a Hamstr crumb app). The demo apps (gym-log, bookmarks, …) live outside this repo |
 
 The store joins only the Traefik network (it needs no app network and no bucket
 access) and holds no celld admin token. It shares that bridge with the celld
@@ -407,16 +407,16 @@ listed under *All*. `tags` (at most 8) are free keywords: search matches them,
 and the app page links each to the apps sharing it, but they are never a
 browse list, so their number does not matter.
 
-Optional, for apps that run as [Hamstr](../hamstr/README.md) grains:
-`permissions` (`[{ "id", "title", "description"? }]`, at most 16; the grain's
+Optional, for apps that run as [Hamstr](../hamstr/README.md) crumbs:
+`permissions` (`[{ "id", "title", "description"? }]`, at most 16; the crumb's
 owner holds every one). The retired `roles` field is still accepted and
 ignored. `instances` is `"many"` (the default: people make as many
-grains as they like, one per document) or `"single"` (one grain per person,
+crumbs as they like, one per document) or `"single"` (one crumb per person,
 opened straight from the Hamstr home screen, like Pinboard). `export` is a
-path in the app (`"/export"`) that answers with one grain's data as a file;
+path in the app (`"/export"`) that answers with one crumb's data as a file;
 Hamstr offers it to owners as *Download data*.
 
-`devices` (`["microphone"]`) is for grains that need browser hardware. Hamstr
+`devices` (`["microphone"]`) is for crumbs that need browser hardware. Hamstr
 lists it in the install dialog like network hosts, asks the admin to allow it,
 and only then lets the app's frame use it (`allow="microphone"`); the browser
 still asks the person. Browsers only provide the microphone on https (or
@@ -469,11 +469,11 @@ labels, internal suffixes or numeric TLDs.
   narrowed: a trusted maintainer's account turning malicious (an update that
   asks for new network access, or one published right after a password change
   or with a token younger than three days, always goes to a person; §5), and a
-  payload fetched after review (Hamstr holds a grain's browser code to the
+  payload fetched after review (Hamstr holds a crumb's browser code to the
   app's declared hosts, below).
-- **Browser code**: Hamstr adds its own Content-Security-Policy to every grain
-  response, next to any the app sends: scripts and fonts only from the grain
-  itself, and connections, images, media and form posts only to the grain and
+- **Browser code**: Hamstr adds its own Content-Security-Policy to every crumb
+  response, next to any the app sends: scripts and fonts only from the crumb
+  itself, and connections, images, media and form posts only to the crumb and
   the hosts the manifest declares (and their subdomains). Code loaded from a
   CDN after review does not run, and page code cannot send what people type to
   a host the install dialog never showed. Inline and eval'd scripts stay
@@ -506,7 +506,12 @@ STORE_HOST=store.example.com
 STORE_DB_PASSWORD=<openssl rand -hex 24>
 STORE_REQUIRE_REVIEW=0   # 1 for a public store
 MODERATION_HOST=moderation.example.com   # LAN-only, never in the tunnel
-MODERATION_PASSWORD=<openssl rand -base64 18>
+# Prefer OIDC (Tailscale tsidp). Password is a local-test fallback only.
+MODERATION_OIDC_ISSUER=https://idp.example.ts.net
+MODERATION_OIDC_CLIENT_ID=...
+MODERATION_OIDC_CLIENT_SECRET=...
+# Redirect URI at the IdP: https://moderation.example.com/auth/callback
+# MODERATION_OIDC_ALLOW=you@example.com
 DEMO_ADMIN_TOKEN=<openssl rand -hex 24>   # hex: the celld entrypoint allows [A-Za-z0-9_-]
 DEMO_READ_TOKEN=<openssl rand -hex 24>
 STORE_DEMO_DOMAIN=example.com
@@ -530,8 +535,10 @@ network.
 `store/moderation/` is a separate site on the same database: one more
 container from the same image (`node store/moderation/server.ts`), with the
 store's volume mounted read-only for the bundles. It is LAN-only and must stay
-that way: it holds the keys to the catalog. Sign in with your name (logged with
-every decision) and `MODERATION_PASSWORD`.
+that way: it holds the keys to the catalog. Sign in with OIDC
+(`MODERATION_OIDC_*`, typically Tailscale tsidp); the provider's name is logged
+with every decision. A shared `MODERATION_PASSWORD` remains as a local-test
+fallback when OIDC is unset.
 
 | Page | What |
 | --- | --- |
@@ -589,14 +596,18 @@ public store, review and takedowns are the main risk reduction.
 
 **Before making it public:**
 
-1. Set `STORE_REQUIRE_REVIEW=1` and a strong `MODERATION_PASSWORD`; check that
-   the moderation hostname resolves only on the LAN.
+1. Set `STORE_REQUIRE_REVIEW=1` and moderation OIDC (`MODERATION_OIDC_*`);
+   check that the moderation hostname resolves only on the LAN / tailnet.
 2. Read the content policy (`store/web/src/routes/policy`) and adjust it:
    every publisher accepts it when they register.
 3. Add the store's hostname, and only that one, to the Cloudflare tunnel (the
    only step that makes it public; local DNS resolves it either way). Keep
    the node and the moderation site LAN/tailnet.
 4. Put rate limits and a body-size limit at the edge as well as in the app.
+   The store keys limits on the visitor address. Set `STORE_PROXY_SECRET` and let
+   Traefik inject matching `X-Hamstr-Proxy` (compose labels do this) so
+   `X-Real-Ip` is only trusted from the proxy — not from other containers on
+   the same Docker network.
 5. Decide who answers reports and how fast; the moderation site has the
    levers, not the people.
 6. Back up both store volumes and test a restore.

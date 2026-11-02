@@ -7,7 +7,7 @@ appliance's own TLS off and let the proxy do the work.
 environment:
   - TLS_MODE=off
   - HAMSTR_HOST=hamstr.example.com
-  - HAMSTR_GRAIN_DOMAIN=example.com
+  - HAMSTR_CRUMB_DOMAIN=example.com
   - HAMSTR_SCHEME=https        # your proxy terminates TLS; use http only for a test
 ```
 
@@ -18,10 +18,10 @@ The container serves plain HTTP on port 8000. Publish only that.
 Two things:
 
 1. Route `HAMSTR_HOST` to the container's port 8000.
-2. Route **every grain hostname** to the same port. Grains look like `grain-<12 lowercase alphanumerics>.<grain
+2. Route **every crumb hostname** to the same port. Crumbs look like `crumb-<12 lowercase alphanumerics>.<crumb
    domain>`, so a wildcard route is the practical answer.
 
-If the grain route is missing, the shell works and every app shows an error when it opens.
+If the crumb route is missing, the shell works and every app shows an error when it opens.
 
 ## Caddy
 
@@ -51,8 +51,8 @@ server {
 }
 ```
 
-`*.example.com` matches one label, which is exactly what grains are. If your grain domain has more labels
-(`grain-*.home.example.com`), match that instead.
+`*.example.com` matches one label, which is exactly what crumbs are. If your crumb domain has more labels
+(`crumb-*.home.example.com`), match that instead.
 
 ## Traefik
 
@@ -66,7 +66,7 @@ networks:
 labels:
   - traefik.enable=true
   - traefik.docker.network=traefik_web
-  - traefik.http.routers.hamstr.rule=Host(`hamstr.example.com`) || HostRegexp(`^grain-[a-z0-9]{12}[.]example[.]com$`)
+  - traefik.http.routers.hamstr.rule=Host(`hamstr.example.com`) || HostRegexp(`^crumb-[a-z0-9]{12}[.]example[.]com$`)
   - traefik.http.routers.hamstr.ruleSyntax=v3
   - traefik.http.routers.hamstr.priority=20
   - traefik.http.services.hamstr.loadbalancer.server.port=8000
@@ -78,7 +78,7 @@ Notes for a Traefik setup:
 - The priority keeps this wide rule above a catch-all router but below more specific ones.
 - Traefik v2 defaults to the old rule syntax, where `HostRegexp` takes `{name:re}`. The label above sets
   `ruleSyntax=v3`; drop it only if your Traefik is v2 and rewrite the rule accordingly.
-- Only one service should answer `*.example.com`. If another router claims the wildcard, grains land in the wrong
+- Only one service should answer `*.example.com`. If another router claims the wildcard, crumbs land in the wrong
   place.
 
 ## Cloudflare Tunnel

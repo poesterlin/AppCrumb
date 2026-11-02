@@ -11,7 +11,7 @@ export default defineConfig({
 	lastUpdated: true,
 	srcExclude: ["README.md"],
 	markdown: {
-		// Inside a Hamstr grain the manual runs in the shell's iframe, so an
+		// Inside a Hamstr crumb the manual runs in the shell's iframe, so an
 		// external link without target would replace the app with a site that
 		// refuses to be framed. Open every external link in a new tab.
 		config(md) {
@@ -48,7 +48,7 @@ export default defineConfig({
 					items: [
 						{ text: "What is Hamstr?", link: "/guide/what-is-hamstr" },
 						{ text: "Quick start", link: "/guide/quickstart" },
-						{ text: "Apps, grains and data", link: "/guide/concepts" },
+						{ text: "Apps, crumbs and data", link: "/guide/concepts" },
 					],
 				},
 			],

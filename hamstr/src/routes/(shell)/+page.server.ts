@@ -4,7 +4,7 @@ export function load({ locals }) {
 	if (!locals.user) return { signedOut: true };
 	const me = locals.user;
 	const rows = c.db
-		.prepare("SELECT * FROM grains WHERE owner_id = ? AND trashed_at IS NULL ORDER BY COALESCE(opened_at, created_at) DESC")
+		.prepare("SELECT * FROM crumbs WHERE owner_id = ? AND trashed_at IS NULL ORDER BY COALESCE(opened_at, created_at) DESC")
 		.all(me.id);
 	const counts = new Map();
 	for (const g of rows) counts.set(g.slug, (counts.get(g.slug) ?? 0) + 1);
@@ -18,6 +18,6 @@ export function load({ locals }) {
 		recent: rows
 			.filter((g) => many.has(g.slug))
 			.slice(0, 6)
-			.map((g) => c.grainJson(g, c.accessFor(g, { userId: me.id }))),
+			.map((g) => c.crumbJson(g, c.accessFor(g, { userId: me.id }))),
 	};
 }

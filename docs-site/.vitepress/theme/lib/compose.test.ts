@@ -35,7 +35,7 @@ function options(scenario: Scenario, extra: Partial<Options> = {}): Options {
 		nameServiceUrl: "https://names.example.net",
 		domain: "example.com",
 		proxyHost: "hamstr.example.com",
-		proxyGrainDomain: "example.com",
+		proxyCrumbDomain: "example.com",
 		addressIpv4: scenario === "names" ? "100.64.0.10" : "",
 		httpPort: scenario === "proxy" || scenario === "home" ? "8000" : "80",
 		...extra,
@@ -102,12 +102,12 @@ test("domain input is normalised, not echoed as given", () => {
 	assert.equal(g.shellUrl, "https://example.com");
 });
 
-test("home mode: no sign-in, plain HTTP, one port per grain", () => {
+test("home mode: no sign-in, plain HTTP, one port per crumb", () => {
 	const g = generate(options("home", { httpPort: "8000" }));
 	assert.deepEqual(g.errors, []);
 	const env = envOf(g.yaml);
 	assert.equal(env.get("HAMSTR_AUTH"), "none");
-	assert.equal(env.get("HAMSTR_GRAIN_PORTS"), "20000-20999");
+	assert.equal(env.get("HAMSTR_CRUMB_PORTS"), "20000-20999");
 	assert.equal(env.get("TLS_MODE"), undefined);
 	assert.deepEqual(portMappings(options("home", { httpPort: "8000" })), [
 		"8000:8000",
@@ -122,7 +122,7 @@ test("behind a proxy: TLS_MODE=off and the hostnames the proxy routes", () => {
 	const env = envOf(g.yaml);
 	assert.equal(env.get("TLS_MODE"), "off");
 	assert.equal(env.get("HAMSTR_HOST"), "hamstr.example.com");
-	assert.equal(env.get("HAMSTR_GRAIN_DOMAIN"), "example.com");
+	assert.equal(env.get("HAMSTR_CRUMB_DOMAIN"), "example.com");
 	assert.equal(env.get("HAMSTR_SCHEME"), "https");
 	assert.deepEqual(portMappings(options("proxy")), ["8000:8000"]);
 });
@@ -190,7 +190,7 @@ test("Traefik labels replace the published port", () => {
 	assert.deepEqual(service.networks, ["default", "traefik_web"]);
 	assert.equal((g.compose as any).networks.traefik_web.external, true);
 	assert.ok(service.labels.some((l: string) => l.includes("Host(`hamstr.example.com`)")));
-	assert.ok(service.labels.some((l: string) => l.includes("HostRegexp(`^grain-[a-z0-9]{12}[.]example[.]com$`)")));
+	assert.ok(service.labels.some((l: string) => l.includes("HostRegexp(`^crumb-[a-z0-9]{12}[.]example[.]com$`)")));
 	assert.match(g.dockerRun, /--network traefik_web/);
 });
 

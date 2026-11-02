@@ -7,7 +7,7 @@
                                     │
                                   Caddy
                      ┌──────────────┴──────────────┐
-        shell, grain-* hostnames            any other hostname
+        shell, crumb-* hostnames            any other hostname
                      │                              │
                   Hamstr :47130                 celld :47180
                      │                              │
@@ -23,8 +23,8 @@ processes in order and stops them in reverse, and the first process to exit take
 
 | Component | What it does |
 | --- | --- |
-| **Caddy** | The only listener. Routes the shell and grain hostnames to Hamstr, everything else to celld. Terminates TLS. |
-| **Hamstr** | The shell, accounts, sign-in, the grain proxy and the admin API for apps. Keeps its state in `/data/hamstr`. |
+| **Caddy** | The only listener. Routes the shell and crumb hostnames to Hamstr, everything else to celld. Terminates TLS. |
+| **Hamstr** | The shell, accounts, sign-in, the crumb proxy and the admin API for apps. Keeps its state in `/data/hamstr`. |
 | **celld** | Runs every site in a Dynamic Worker isolate. The router in front of it picks a site by `Host`. |
 | **VersityGW** | An S3-compatible gateway over `/data/s3`. Holds deployments, assets and all Durable Object data. |
 | **lego + names agent** | Registers the hostname and gets the wildcard certificate by DNS-01. |
@@ -34,18 +34,18 @@ processes in order and stops them in reverse, and the first process to exit take
 
 **The shell:** browser → Caddy → Hamstr → the HTML, JS and API calls for the home screen.
 
-**A grain:** browser → Caddy → Hamstr's grain proxy → celld → the grain's isolate.
+**A crumb:** browser → Caddy → Hamstr's crumb proxy → celld → the crumb's isolate.
 
-The proxy is what makes grains private:
+The proxy is what makes crumbs private:
 
-1. It checks the grain session cookie.
+1. It checks the crumb session cookie.
 2. It drops any `X-Hamstr-*` headers the browser sent.
-3. It adds `X-Hamstr-User-Id`, `-Username`, `-Permissions`, `-Role` and `-Grain-Id`.
-4. celld serves `grain-*` sites only to requests carrying `PROXY_TOKEN`, so nobody can reach a grain directly.
+3. It adds `X-Hamstr-User-Id`, `-Username`, `-Permissions`, `-Role` and `-Crumb-Id`.
+4. celld serves `crumb-*` sites only to requests carrying `PROXY_TOKEN`, so nobody can reach a crumb directly.
 
-Opening a grain: the shell asks for a one-time ticket (60 seconds, single use, bound to that grain) and loads
-`https://grain-<id>.<domain>/.hamstr/enter?ticket=…` in an iframe. The grain host turns the ticket into a session
-cookie. Every later request re-checks access, so signing out or trashing a grain takes effect on the next request.
+Opening a crumb: the shell asks for a one-time ticket (60 seconds, single use, bound to that crumb) and loads
+`https://crumb-<id>.<domain>/.hamstr/enter?ticket=…` in an iframe. The crumb host turns the ticket into a session
+cookie. Every later request re-checks access, so signing out or trashing a crumb takes effect on the next request.
 
 **A plain site:** browser → Caddy → celld → the site's isolate. If the site declares `"auth": "required"`, celld sends
 visitors to Hamstr first.
@@ -61,7 +61,7 @@ celld treats the bucket as the source of truth. On disk:
 `/data/celld` is a local working copy so a restart does not re-download everything; it can be recreated from the
 bucket.
 
-A grain is a site whose id is its hostname. Updating an app stages a new version, runs the deploy check on a scratch
+A crumb is a site whose id is its hostname. Updating an app stages a new version, runs the deploy check on a scratch
 site, activates it, watches it for a few seconds, and rolls code back if it breaks. Data is not rolled back.
 
 ## Isolation

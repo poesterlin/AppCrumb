@@ -8,7 +8,7 @@ Hamstr manages people once, for every app.
 | --- | --- |
 | Owner | everything, including the store, sign-in and sites. The first person to sign in. |
 | Admin | approve people, manage groups and sites, install apps for everyone. |
-| Member | use the apps and grains they are given. |
+| Member | use the apps and crumbs they are given. |
 
 The owner can make other people admins. There is no separate "app admin": Hamstr's settings are the control plane.
 
@@ -32,7 +32,7 @@ On **Settings → Sites**, each celld site can be:
 - open to anyone, signed in or not;
 - protected even if the site itself did not ask for it.
 
-Grains are not configured here: a grain is always private to its owner.
+Crumbs are not configured here: a crumb is always private to its owner.
 
 ## Sign-in methods
 
@@ -49,10 +49,10 @@ removing them.
 Removing a person:
 
 - ends their access to the shell and to sites;
-- leaves their grains in the database, but nobody can open them;
+- leaves their crumbs in the database, but nobody can open them;
 - does not delete the data.
 
-If the data matters, the owner should take a backup of the grains first, or the person should export them before they
+If the data matters, the owner should take a backup of the crumbs first, or the person should export them before they
 are removed.
 
 ## The owner account

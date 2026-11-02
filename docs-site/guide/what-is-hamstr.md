@@ -21,19 +21,19 @@ You can now build a small tool with one prompt. Getting it to people is still aw
 Hamstr sits in between. It is a URL on your network or your domain, with sign-in, storage and updates handled once for
 every app.
 
-## Apps and grains
+## Apps and crumbs
 
 An **app** is a small web app from a store: a manifest, a server and static files, packed as one bundle.
 
-A **grain** is one thing you made with an app. A board, a list, a draw. Every grain:
+A **crumb** is one thing you made with an app. A board, a list, a draw. Every crumb:
 
-- is its own site at `grain-<id>.<your domain>`;
+- is its own site at `crumb-<id>.<your domain>`;
 - has its own Durable Objects, so its own SQLite database;
 - belongs to the person who made it, and is invisible to everyone else;
 - has no internet access unless the app declares egress and an admin allows it.
 
-Tapping an app on your home screen shows the grains you made with it and a **New** tile. An app that declares
-`"instances": "single"` has one grain per person instead, and its icon opens it directly.
+Tapping an app on your home screen shows the crumbs you made with it and a **New** tile. An app that declares
+`"instances": "single"` has one crumb per person instead, and its icon opens it directly.
 
 ## Sign-in is the platform's job
 
@@ -52,7 +52,7 @@ Everything lives under `/data` in the container:
 /data
 ├── s3/          the bucket: every site's code and Durable Object data
 ├── celld/       celld's local working copy (safe to lose, rebuilt from the bucket)
-├── hamstr/      accounts, people, grains and the shell's database
+├── hamstr/      accounts, people, crumbs and the shell's database
 ├── tls/         the certificate and key
 ├── names/       the names-service registration
 └── secrets.env  generated on first start; the bucket only opens with it
@@ -72,5 +72,5 @@ Back it up by copying the volume. Keep `secrets.env` with it, or the bucket is u
 ## Next
 
 - [Quick start](/guide/quickstart) — get a running install.
-- [Apps, grains and data](/guide/concepts) — the model in more detail.
+- [Apps, crumbs and data](/guide/concepts) — the model in more detail.
 - [Security](/reference/security) — what an app can reach.

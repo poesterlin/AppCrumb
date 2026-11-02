@@ -42,7 +42,7 @@ services:
     stop_grace_period: 60s
     environment:
       - HAMSTR_AUTH=none
-      - HAMSTR_GRAIN_PORTS=20000-20999
+      - HAMSTR_CRUMB_PORTS=20000-20999
       - HAMSTR_STORE=https://store.hamstr.app
     volumes:
       - hamstr-data:/data
@@ -91,7 +91,7 @@ The stack and the appliance are two ways to run the same code. Do not run both a
 2. **Set the store.** Without a store there is nothing to install. `https://store.hamstr.app` is the default; any
    compatible store works.
 3. **Get an app** on the *Store* page. An admin's **Get** puts it on everyone's home screen at once.
-4. **Make a grain.** Tap the app, then **New**.
+4. **Make a crumb.** Tap the app, then **New**.
 
 ## Next
 

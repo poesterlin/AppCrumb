@@ -9,7 +9,7 @@ networking does not collide with other services.
 | --- | --- | --- | --- |
 | `8000` | Caddy (HTTP) | published | Redirects to HTTPS when TLS is on. Home mode serves the shell here. |
 | `8443` | Caddy (HTTPS) | published | The browser entry point with a domain or names service. |
-| `20000-20999` | Caddy (grains) | published in home mode | One port per grain, opened as grains are used. |
+| `20000-20999` | Caddy (crumbs) | published in home mode | One port per crumb, opened as crumbs are used. |
 | `8099` | panel | Home Assistant ingress and loopback | The sidebar page. |
 | `47101` | health | loopback | Used by the image's health check. |
 | `47130` | Hamstr | loopback | |

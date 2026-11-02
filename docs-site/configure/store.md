@@ -14,7 +14,7 @@ environment:
 - In the Home Assistant add-on, this is the **App store** option.
 - Restart the container after changing it.
 
-A store only serves metadata and bundles. It never runs app code, and it never sees the data in your grains.
+A store only serves metadata and bundles. It never runs app code, and it never sees the data in your crumbs.
 
 ## Install an app
 
@@ -51,8 +51,8 @@ bucket, state and token; it cannot reach your install. The demo is thrown away a
 
 An app's release is immutable. When the publisher ships a new version and you update it:
 
-- every grain moves to the new version;
-- grain data stays;
+- every crumb moves to the new version;
+- crumb data stays;
 - the app's migrations run on first use.
 
 An app cannot be updated to a version older than the one that made a backup you are restoring. Update first, then
@@ -94,7 +94,7 @@ Do not confuse the two roles:
 | | Personal Hamstr | Hamstr Store |
 | --- | --- | --- |
 | Runs app code | yes | no |
-| Holds grain data | yes | no |
+| Holds crumb data | yes | no |
 | Needs an account | for its people | for publishers only |
 | Public by default | no | no |
 

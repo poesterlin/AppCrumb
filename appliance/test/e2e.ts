@@ -19,7 +19,7 @@ const { createStore } = await import(`${REPO}/store/server.ts`);
 
 const GW = "172.17.0.1", PORT = 18080, NAME = "appliance-test", VOL = "appliance-test-data";
 const HOME = "appliance-home", HOME_VOL = "appliance-home-data", HOME_PORT = 18000;
-const SHELL = "hamstr.test", host = (id) => `grain-${id}.grains.test`;
+const SHELL = "hamstr.test", host = (id) => `crumb-${id}.crumbs.test`;
 const ORIGIN = { origin: `http://${SHELL}` };
 const FORM = { "content-type": "application/x-www-form-urlencoded", "sec-fetch-site": "same-origin", "sec-fetch-mode": "navigate" };
 const dir = mkdtempSync(join(tmpdir(), "appliance-e2e-"));
@@ -54,7 +54,7 @@ try {
 	}
 	let t = performance.now();
 	sh("docker", ["run", "-d", "--name", NAME, "--init", "-p", `127.0.0.1:${PORT}:8000`, "-v", `${VOL}:/data`,
-		"-e", `HAMSTR_HOST=${SHELL}`, "-e", "HAMSTR_GRAIN_DOMAIN=grains.test", "-e", "HAMSTR_SCHEME=http",
+		"-e", `HAMSTR_HOST=${SHELL}`, "-e", "HAMSTR_CRUMB_DOMAIN=crumbs.test", "-e", "HAMSTR_SCHEME=http",
 		"-e", `HAMSTR_STORE=http://${GW}:18092`, "-e", `HAMSTR_STORE_PUBLIC=http://${GW}:18092`,
 		"-e", "OIDC_NAME=Test", "-e", `OIDC_ISSUER=${idp.issuer}`, "-e", `OIDC_CLIENT_ID=${idp.clientId}`, "-e", `OIDC_CLIENT_SECRET=${idp.clientSecret}`,
 		IMAGE]);
@@ -75,7 +75,9 @@ try {
 		assert.ok([302, 303].includes((await b.request("GET", cb.pathname + cb.search, { host: SHELL })).status));
 		return b;
 	};
+	// fallow-ignore-next-line code-duplication
 	const api = (b, method, path, json?) => b.request(method, path, { host: SHELL, headers: ORIGIN, ...(json !== undefined && { json }) });
+	// fallow-ignore-next-line code-duplication
 	const go = (b, absolute) => { const u = new URL(absolute); return b.request("GET", u.pathname + u.search, { host: u.hostname }); };
 
 	const ada = await signIn({ sub: "u-ada", email: "ada@example.com", name: "Ada Lovelace" });
@@ -83,23 +85,23 @@ try {
 	const installed = await api(ada, "POST", "/api/apps", { id: "e2e/pinboard" });
 	assert.equal(installed.status, 200, installed.text);
 	console.log(`installed pinboard from the store: ${ms(t)}`);
-	const board = (await api(ada, "POST", "/api/grains", { slug: "pinboard", title: "Kitchen" })).json.grain;
-	assert.equal((await go(ada, (await api(ada, "POST", `/api/grains/${board.id}/open`, { path: "/" })).json.url)).status, 303);
+	const board = (await api(ada, "POST", "/api/crumbs", { slug: "pinboard", title: "Kitchen" })).json.crumb;
+	assert.equal((await go(ada, (await api(ada, "POST", `/api/crumbs/${board.id}/open`, { path: "/" })).json.url)).status, 303);
 	const who = (await ada.request("GET", "/whoami", { host: host(board.id) })).json;
 	assert.equal(who.name, "Ada Lovelace");
 	assert.equal((await ada.request("POST", "/pin", { host: host(board.id), headers: FORM, body: "text=Buy+oat+milk&color=leaf" })).status, 303);
 	assert.match((await ada.request("GET", "/", { host: host(board.id) })).text, /Buy oat milk/);
-	console.log("grain through Caddy → Hamstr → celld: identity and a pin OK");
+	console.log("crumb through Caddy → Hamstr → celld: identity and a pin OK");
 
-	// Front door: no admin API, grains never straight to celld.
+	// Front door: no admin API, crumbs never straight to celld.
 	const anon = new Browser(PORT);
 	assert.equal((await anon.request("GET", "/__admin/overview", { host: "admin.internal" })).status, 404);
 	assert.equal((await anon.request("GET", "/", { host: host(board.id) })).status, 401);
 	const direct = sh("docker", ["exec", NAME, "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-H", `Host: ${host(board.id)}`, "http://127.0.0.1:47180/"]);
-	assert.equal(direct, "404", "celld answers a grain only with the proxy token");
+	assert.equal(direct, "404", "celld answers a crumb only with the proxy token");
 	const eve = await signIn({ sub: "u-eve", email: "eve@example.com", name: "Eve" });
 	assert.notEqual((await eve.request("GET", "/", { host: host(board.id) })).status, 200);
-	console.log("admin.internal 404 at the front door; grain closed to anonymous, to Eve and to direct celld requests");
+	console.log("admin.internal 404 at the front door; crumb closed to anonymous, to Eve and to direct celld requests");
 
 	// A plain celld site, deployed the way tools/deploy.sh does it.
 	execFileSync("npm", ["run", "build"], { cwd: `${REPO}/sites/example`, stdio: "ignore" });
@@ -123,7 +125,7 @@ try {
 	console.log(`restart to healthy: ${await waitHealthy()}`);
 	assert.match((await ada.request("GET", "/", { host: host(board.id) })).text, /Buy oat milk/, "pin survives a restart, session too");
 	assert.equal((await anon.request("GET", "/", { host: "example.test" })).status, 200, "site survives a restart");
-	console.log("after restart: session, grain data and site all still there");
+	console.log("after restart: session, crumb data and site all still there");
 
 	// Crash: kill Hamstr; the supervisor takes the container down, Docker restarts it.
 	sh("docker", ["update", "--restart", "unless-stopped", NAME]);
@@ -133,23 +135,23 @@ try {
 	console.log(`killed Hamstr: container went down and Docker restarted it after ${ms(t)}; healthy again ${await waitHealthy()} later`);
 	assert.match((await ada.request("GET", "/", { host: host(board.id) })).text, /Buy oat milk/);
 
-	// Home mode: no sign-in, a port per grain, nothing else configured.
+	// Home mode: no sign-in, a port per crumb, nothing else configured.
 	t = performance.now();
 	sh("docker", ["run", "-d", "--name", HOME, "--init", "-p", `127.0.0.1:${HOME_PORT}:8000`, "-p", "127.0.0.1:20000-20002:20000-20002", "-v", `${HOME_VOL}:/data`,
-		"-e", "HAMSTR_AUTH=none", "-e", "HAMSTR_GRAIN_PORTS=20000-20002", "-e", `HAMSTR_STORE=http://${GW}:18092`, IMAGE]);
+		"-e", "HAMSTR_AUTH=none", "-e", "HAMSTR_CRUMB_PORTS=20000-20002", "-e", `HAMSTR_STORE=http://${GW}:18092`, IMAGE]);
 	console.log(`home mode: healthy in ${await waitHealthy(HOME)}`);
 	const visitor = new Browser(HOME_PORT);
 	const shellHost = `127.0.0.1:${HOME_PORT}`;
 	const homeApi = (method, path, json?) => visitor.request(method, path, { host: shellHost, headers: { origin: `http://${shellHost}`, "sec-fetch-site": "same-origin" }, ...(json !== undefined && { json }) });
 	assert.equal((await visitor.request("GET", "/", { host: shellHost })).status, 200, "the shell opens without signing in");
 	assert.equal((await homeApi("POST", "/api/apps", { id: "e2e/pinboard" })).status, 200);
-	const homeBoard = (await homeApi("POST", "/api/grains", { slug: "pinboard", title: "Kitchen" })).json.grain;
-	const url = (await homeApi("POST", `/api/grains/${homeBoard.id}/open`, { path: "/" })).json.url;
+	const homeBoard = (await homeApi("POST", "/api/crumbs", { slug: "pinboard", title: "Kitchen" })).json.crumb;
+	const url = (await homeApi("POST", `/api/crumbs/${homeBoard.id}/open`, { path: "/" })).json.url;
 	assert.equal(url, "http://127.0.0.1:20000/");
-	const grain = new Browser(20000);
-	const grainHeaders = { ...FORM, origin: "http://127.0.0.1:20000" };
-	assert.equal((await grain.request("POST", "/pin", { host: "127.0.0.1:20000", headers: grainHeaders, body: "text=From+home+mode&color=sun" })).status, 303);
-	const homeWho = (await grain.request("GET", "/whoami", { host: "127.0.0.1:20000" })).json;
+	const crumb = new Browser(20000);
+	const crumbHeaders = { ...FORM, origin: "http://127.0.0.1:20000" };
+	assert.equal((await crumb.request("POST", "/pin", { host: "127.0.0.1:20000", headers: crumbHeaders, body: "text=From+home+mode&color=sun" })).status, 303);
+	const homeWho = (await crumb.request("GET", "/whoami", { host: "127.0.0.1:20000" })).json;
 	assert.deepEqual([homeWho.name, homeWho.role], ["Owner", "owner"]);
 	// The Home Assistant panel links to the shell; only ingress and loopback get it.
 	const panel = sh("docker", ["exec", HOME, "curl", "-s", "http://127.0.0.1:8099/"]);
@@ -160,8 +162,8 @@ try {
 	assert.equal(sh("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", `http://${homeIp}:8099/`]), "403", "the panel is for ingress only");
 	sh("docker", ["restart", "-t", "60", HOME]);
 	await waitHealthy(HOME);
-	assert.match((await new Browser(20000).request("GET", "/", { host: "127.0.0.1:20000" })).text, /From home mode/, "the grain's port and data survive a restart");
-	console.log(`home mode: shell without sign-in, pinboard installed, grain on port 20000 as the owner, data kept across a restart (${ms(t)})`);
+	assert.match((await new Browser(20000).request("GET", "/", { host: "127.0.0.1:20000" })).text, /From home mode/, "the crumb's port and data survive a restart");
+	console.log(`home mode: shell without sign-in, pinboard installed, crumb on port 20000 as the owner, data kept across a restart (${ms(t)})`);
 	console.log("appliance e2e OK");
 } finally {
 	if (!process.env.KEEP) for (const [name, vol] of [[NAME, VOL], [HOME, HOME_VOL]]) try { sh("docker", ["rm", "-f", name]); sh("docker", ["volume", "rm", vol]); } catch {}

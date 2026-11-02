@@ -76,7 +76,7 @@ export class Box extends DurableObject {
 	process.env.TEST_SITE_MAX_INFLIGHT = "2";
 	await flood.start();
 	main.deploy(dir, host);
-	main.deploy(dir, "grain-guarded.test");
+	main.deploy(dir, "crumb-guarded.test");
 	quota.deploy(dir, host);
 	flood.deploy(dir, host);
 	const v = await main.putVersion("bbbbbbbbbbbb", { "index.html": "home\n" }, { host: "files.test" });
@@ -122,19 +122,19 @@ describe("isolate boundary", () => {
 	});
 });
 
-describe("proxy-only grain sites", () => {
-	const grain = (headers = {}) => main.request("GET", "/hdr", { host: "grain-guarded.test", headers });
-	it("hides a grain site from requests without the proxy token", async () => {
-		assert.equal((await grain()).status, 404);
-		assert.equal((await grain({ "x-celld-proxy-token": "wrong", "x-hamstr-user-id": "forged" })).status, 404);
+describe("proxy-only crumb sites", () => {
+	const crumb = (headers = {}) => main.request("GET", "/hdr", { host: "crumb-guarded.test", headers });
+	it("hides a crumb site from requests without the proxy token", async () => {
+		assert.equal((await crumb()).status, 404);
+		assert.equal((await crumb({ "x-celld-proxy-token": "wrong", "x-hamstr-user-id": "forged" })).status, 404);
 	});
 	it("serves the proxy and strips the token before the site sees it", async () => {
-		const r = await grain({ "x-celld-proxy-token": main.proxyToken, "x-hamstr-user-id": "u1" });
+		const r = await crumb({ "x-celld-proxy-token": main.proxyToken, "x-hamstr-user-id": "u1" });
 		assert.equal(r.status, 200);
 		assert.deepEqual(r.json(), { proxy: null, user: "u1" });
 	});
 	it("does not let an alias bypass the check", async () => {
-		assert.equal((await main.admin("PUT", "/alias?host=open-door.test&site=grain-guarded.test")).status, 200);
+		assert.equal((await main.admin("PUT", "/alias?host=open-door.test&site=crumb-guarded.test")).status, 200);
 		assert.equal((await main.request("GET", "/hdr", { host: "open-door.test" })).status, 404);
 		assert.equal((await main.admin("DELETE", "/alias?host=open-door.test")).status, 200);
 	});

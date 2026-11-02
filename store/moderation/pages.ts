@@ -74,18 +74,30 @@ ${
 
 export const csrfField = (csrf: string) => `<input type="hidden" name="_csrf" value="${esc(csrf)}">`;
 
-export function loginPage(error?: string): string {
-	return layout(
-		{ title: "Sign in" },
-		`<section class="panel login">
-		<h1>Store moderation</h1>
-		<p class="dim">Your name goes into the log with every decision.</p>
+export function loginPage(
+	error?: string,
+	opts: { oidcName?: string; password?: boolean } = {},
+): string {
+	const oidc = opts.oidcName
+		? `<p class="dim">Sign in with ${esc(opts.oidcName)}. Your name from the provider goes into the log with every decision.</p>
+		${error ? `<p class="callout error">${esc(error)}</p>` : ""}
+		<p><a class="button" href="/auth/start">Sign in with ${esc(opts.oidcName)}</a></p>`
+		: "";
+	const password =
+		opts.password !== false && !opts.oidcName
+			? `<p class="dim">Your name goes into the log with every decision.</p>
 		${error ? `<p class="callout error">${esc(error)}</p>` : ""}
 		<form method="post" action="/login">
 			<div class="field"><label for="name">Your name</label><input class="input" id="name" name="name" required minlength="2" maxlength="30" autocomplete="username"></div>
 			<div class="field"><label for="password">Moderator password</label><input class="input" id="password" name="password" type="password" required autocomplete="current-password"></div>
 			<button class="button">Sign in</button>
-		</form>
+		</form>`
+			: "";
+	return layout(
+		{ title: "Sign in" },
+		`<section class="panel login">
+		<h1>Store moderation</h1>
+		${oidc || password || `${error ? `<p class="callout error">${esc(error)}</p>` : ""}<p class="dim">Sign-in is not configured.</p>`}
 	</section>`,
 	);
 }

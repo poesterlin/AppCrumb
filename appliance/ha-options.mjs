@@ -12,7 +12,7 @@ const map = {
 	address: "ADDRESS_IPV4",
 	acme_email: "ACME_EMAIL",
 	hamstr_host: "HAMSTR_HOST",
-	grain_domain: "HAMSTR_GRAIN_DOMAIN",
+	crumb_domain: "HAMSTR_CRUMB_DOMAIN",
 	oidc_name: "OIDC_NAME",
 	oidc_issuer: "OIDC_ISSUER",
 	oidc_client_id: "OIDC_CLIENT_ID",

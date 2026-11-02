@@ -8,7 +8,7 @@ VPS. Images for `linux/amd64` and `linux/arm64`
 ```
             :8443 HTTPS / :8000 HTTP
                      │
-                   Caddy ─── shell, grain-* ──▶ Hamstr :3000 ──┐
+                   Caddy ─── shell, crumb-* ──▶ Hamstr :3000 ──┐
                      └────── any other name ──▶ celld  :8080 ◀─┘
                                                   │
                                        VersityGW :7070 (S3) ── /data/s3
@@ -54,7 +54,7 @@ Release: tag `vX.Y.Z`, then set `version` in `ha-addon/config.yaml` to it.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `HAMSTR_AUTH` | `required` | `none`: home mode (below) |
-| `HAMSTR_GRAIN_PORTS` | `20000-20999` | Home mode: the ports grains get |
+| `HAMSTR_CRUMB_PORTS` | `20000-20999` | Home mode: the ports crumbs get |
 | `HTTP_PORT`, `HTTPS_PORT` | `8000`, `8443` | The ports for browsers. Everything else is on loopback, ports 47101-47181, except the panel below |
 | `CELLD_LOG` | `warn` | celld's log level (`RUST_LOG`); `info` adds its routine lines, several a second |
 | `TLS_MODE` | `off` | `off`: HTTP on :8000, for a proxy in front that terminates TLS. `names`: a name from a Hamstr names service (`NAME_SERVICE_URL`). `domain`: your own domain at a DNS provider |
@@ -62,14 +62,14 @@ Release: tag `vX.Y.Z`, then set `version` in `ha-addon/config.yaml` to it.
 | `DOMAIN`, `DNS_PROVIDER` + the provider's variables | — | `domain` mode: lego's DNS-01 provider (`lego dnshelp`), and a `*.DOMAIN` record pointing at this host |
 | `ADDRESS_IPV4`, `ADDRESS_IPV6` | the host's Tailscale address | `names` mode: what the name points at. Found automatically when the container shares the host network and the host runs Tailscale |
 | `ACME_SERVER`, `ACME_EMAIL` | Let's Encrypt | Certificate authority |
-| `HAMSTR_HOST`, `HAMSTR_GRAIN_DOMAIN` | the TLS hostname | The shell, and the domain grains live under (`grain-<id>.<domain>`). Required with `TLS_MODE=off` |
+| `HAMSTR_HOST`, `HAMSTR_CRUMB_DOMAIN` | the TLS hostname | The shell, and the domain crumbs live under (`crumb-<id>.<domain>`). Required with `TLS_MODE=off` |
 | `HAMSTR_SCHEME` | `https` | `http` only for tests |
 | `OIDC_NAME`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | — | The first sign-in provider (afterwards: Settings → Sign-in). The issuer must be HTTPS. Redirect URI: `https://<HAMSTR_HOST>/auth/callback/<name in lowercase>` |
 | `HAMSTR_STORE`, `HAMSTR_STORE_PUBLIC` | — | The Hamstr Store apps come from |
 | `SITE_*`, `CELLD_V8_HEAP_LIMIT_MB`, `CELLD_LTX_RETENTION_SECS`, `S3_FSYNC` | as in the compose stack | See `.env.example` in the project root |
 
-With TLS, the install's name is the shell (`https://k3x9.hamstr.app`), grains
-are `grain-<id>.k3x9.hamstr.app`, and any other name below it is a celld site.
+With TLS, the install's name is the shell (`https://k3x9.hamstr.app`), crumbs
+are `crumb-<id>.k3x9.hamstr.app`, and any other name below it is a celld site.
 A renewal reloads Caddy; a new name (after the names service released the old
 one) restarts the container, since Hamstr was started for the old one.
 
@@ -80,12 +80,12 @@ one) restarts the container, since Hamstr was started for the old one.
 - No sign-in: every visitor is the owner. Use it on a network you trust.
 - Plain HTTP on `HTTP_PORT`, on any hostname (an IP, `homeassistant.local`).
   `TLS_MODE` is ignored.
-- Each grain gets a port of its own (`HAMSTR_GRAIN_PORTS`), opened when the
-  grain is first opened. A separate port is a separate origin, so grains stay
+- Each crumb gets a port of its own (`HAMSTR_CRUMB_PORTS`), opened when the
+  crumb is first opened. A separate port is a separate origin, so crumbs stay
   isolated from each other and from the shell without hostnames. They are not
   isolated in cookies, which browsers share across ports; apps get their
   identity from Hamstr, not from cookies.
-- Publish the grain ports, or use the host's network (`--network host`, which
+- Publish the crumb ports, or use the host's network (`--network host`, which
   the Home Assistant add-on does).
 
 ### The Home Assistant panel
@@ -100,7 +100,7 @@ HTTPS page.
 ### Tailscale
 
 Tailscale's own certificates (`tailscale cert`) cover one machine name, not
-the wildcard grains need, so TLS comes from DNS-01 instead and Tailscale only
+the wildcard crumbs need, so TLS comes from DNS-01 instead and Tailscale only
 carries the traffic: the name points at the Tailscale address, which only your
 tailnet reaches. Nothing is published to the internet. tsidp gives "Sign in
 with Tailscale" as the OIDC provider.
@@ -109,7 +109,7 @@ with Tailscale" as the OIDC provider.
 
 All of it is in `/data`: `s3/` (the bucket: every site's code and Durable
 Object data), `celld/` (celld's local working copy), `hamstr/` (accounts,
-grains), `tls/` and `names/` (certificate and registration), and
+crumbs), `tls/` and `names/` (certificate and registration), and
 `secrets.env`, generated from `/dev/urandom` on first start. Back up the whole
 volume; `secrets.env` belongs with the data, since the bucket only opens with
 its keys.
@@ -135,7 +135,7 @@ tar -C /tmp/bundle -cf - . | docker exec -i hamstr /app/with-env /app/push.sh bl
 
 ```sh
 docker build -f appliance/Dockerfile -t celld-appliance .
-node appliance/test/e2e.ts      # sign-in, app install, grain, site deploy, restarts (TLS_MODE=off)
+node appliance/test/e2e.ts      # sign-in, app install, crumb, site deploy, restarts (TLS_MODE=off)
 appliance/test/tls.sh           # HTTPS with the names agent and Pebble, configured like Home Assistant
 ```
 

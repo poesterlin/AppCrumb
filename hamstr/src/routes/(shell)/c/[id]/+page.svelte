@@ -7,11 +7,11 @@
 	import { ICON } from "@hamstr/ui/icons.ts";
 	import AppIcon from "@hamstr/ui/components/AppIcon.svelte";
 	import MoreMenu from "@hamstr/ui/components/MoreMenu.svelte";
-	import { downloadGrain } from "#lib/client/download.ts";
+	import { downloadCrumb } from "#lib/client/download.ts";
 
 	let { data } = $props();
 
-	const grain = $derived(data.grain);
+	const crumb = $derived(data.crumb);
 	const app = $derived(data.app);
 	// Back to where it lives: the app's own page, or Home for a single-instance app.
 	const back = $derived(app && app.instances !== "single" ? `/a/${app.slug}` : "/");
@@ -36,13 +36,13 @@
 	let titleInput = $state(null);
 
 	$effect(() => {
-		if (data.grain) title = data.grain.title;
+		if (data.crumb) title = data.crumb.title;
 	});
 
 	onMount(async () => {
-		if (!grain || grain.trashedAt) return;
+		if (!crumb || crumb.trashedAt) return;
 		try {
-			const { url } = await api(`/api/grains/${grain.id}/open`, { method: "POST", body: { path: "/" } });
+			const { url } = await api(`/api/crumbs/${crumb.id}/open`, { method: "POST", body: { path: "/" } });
 			frameSrc = url;
 		} catch (err) {
 			oops(err);
@@ -51,12 +51,12 @@
 
 	async function saveTitle() {
 		const value = title.trim();
-		if (!value || value === grain.title) return void (title = grain.title);
+		if (!value || value === crumb.title) return void (title = crumb.title);
 		try {
-			await api(`/api/grains/${grain.id}`, { method: "PATCH", body: { title: value } });
+			await api(`/api/crumbs/${crumb.id}`, { method: "PATCH", body: { title: value } });
 			await invalidateAll();
 		} catch (err) {
-			title = grain.title;
+			title = crumb.title;
 			oops(err);
 		}
 	}
@@ -64,7 +64,7 @@
 	async function download() {
 		toast("Preparing the download…");
 		try {
-			toast(`Downloaded ${await downloadGrain(grain.id)}`);
+			toast(`Downloaded ${await downloadCrumb(crumb.id)}`);
 		} catch (err) {
 			oops(err);
 		}
@@ -77,14 +77,14 @@
 
 	const menu = $derived([
 		{ label: "Rename", icon: "pencil", onclick: renameNow },
-		{ label: "Manage data…", icon: "download", hidden: !app, onclick: () => askManage(grain, app) },
+		{ label: "Manage data…", icon: "download", hidden: !app, onclick: () => askManage(crumb, app) },
 		{ label: `About ${app?.name ?? "this app"}`, icon: "info", hidden: !app, onclick: () => goto(`/a/${app.slug}`) },
 		{ label: "Move to trash", icon: "trash", danger: true, separator: true, onclick: trash },
 	]);
 
 	async function trash() {
 		try {
-			await api(`/api/grains/${grain.id}/trash`, { method: "POST", body: {} });
+			await api(`/api/crumbs/${crumb.id}/trash`, { method: "POST", body: {} });
 			toast("Moved to the trash");
 			await goto(back);
 		} catch (err) {
@@ -94,7 +94,7 @@
 
 	async function restore() {
 		try {
-			await api(`/api/grains/${grain.id}/restore`, { method: "POST", body: {} });
+			await api(`/api/crumbs/${crumb.id}/restore`, { method: "POST", body: {} });
 			await invalidateAll();
 		} catch (err) {
 			oops(err);
@@ -102,7 +102,7 @@
 	}
 </script>
 
-<svelte:head><title>{grain ? `${grain.title} · ${page.data.name}` : page.data.name}</title></svelte:head>
+<svelte:head><title>{crumb ? `${crumb.title} · ${page.data.name}` : page.data.name}</title></svelte:head>
 
 {#if data.missing}
 	<div class="page">
@@ -111,26 +111,26 @@
 			<p><a class="button" href="/">Home</a></p>
 		</div>
 	</div>
-{:else if grain && !data.signedOut}
-	{#if grain.trashedAt}
+{:else if crumb && !data.signedOut}
+	{#if crumb.trashedAt}
 		<div class="page">
 			<div class="empty">
-				<h2>“{grain.title}” is in the trash</h2>
+				<h2>“{crumb.title}” is in the trash</h2>
 				<p>Restore it to open it again.</p>
 				<button type="button" class="button" onclick={restore}>Restore</button>
 			</div>
 		</div>
 	{:else}
-		<div class="grain-view">
-			<div class="grain-bar">
+		<div class="crumb-view">
+			<div class="crumb-bar">
 				<a class="icon-button" href={back} aria-label="Back" title="Back">{@html ICON.back}</a>
 				<a class="crumb-app" href={app ? `/a/${app.slug}` : back} title={app ? `All of ${app.name}` : "Back"}>
-					<AppIcon app={grain.app} />
-					<span class="hide-sm">{grain.app.name}</span>
+					<AppIcon app={crumb.app} />
+					<span class="hide-sm">{crumb.app.name}</span>
 				</a>
 				<span class="crumb-sep hide-sm">{@html ICON.chevron}</span>
 				<input
-					class="grain-title"
+					class="crumb-title"
 					bind:this={titleInput}
 					bind:value={title}
 					maxlength="80"
@@ -140,7 +140,7 @@
 					onkeydown={(event) => {
 						if (event.key === "Enter") event.currentTarget.blur();
 						if (event.key === "Escape") {
-							title = grain.title;
+							title = crumb.title;
 							event.currentTarget.blur();
 						}
 					}}
@@ -149,28 +149,28 @@
 				{#if app?.canExport}
 					<button type="button" class="icon-button hide-sm" onclick={download} aria-label="Download data" title="Download data">{@html ICON.download}</button>
 				{/if}
-				<a class="icon-button" href="/g/{grain.id}/open" target="_blank" rel="noopener" aria-label="Open in a new tab" title="Open in a new tab">
+				<a class="icon-button" href="/c/{crumb.id}/open" target="_blank" rel="noopener" aria-label="Open in a new tab" title="Open in a new tab">
 					{@html ICON.external}
 				</a>
 				<MoreMenu items={menu} />
 			</div>
 			{#if micBlocked}
-				<div class="callout warn grain-warn" role="alert">
+				<div class="callout warn crumb-warn" role="alert">
 					<strong>{app.name} needs the microphone, but this page is not on https.</strong>
 					<span class="small">Your browser blocks the microphone on plain http addresses, so the app can't listen here. Open Hamstr over https (a Tailscale or Cloudflare link, or a reverse proxy with a certificate) and it will work.</span>
 				</div>
 			{/if}
 			{#if frameSrc}
-				<!-- A grain is another origin. No top navigation without a click, so an
+				<!-- A crumb is another origin. No top navigation without a click, so an
 				     app cannot silently replace the shell with a look-alike page. -->
 				<iframe
-					class="grain-frame"
-					title={grain.title}
+					class="crumb-frame"
+					title={crumb.title}
 					sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals allow-top-navigation-by-user-activation"
 					allow={frameAllow}
 					src={frameSrc}></iframe>
 			{:else}
-				<div class="grain-loading"><span class="spinner"></span></div>
+				<div class="crumb-loading"><span class="spinner"></span></div>
 			{/if}
 		</div>
 	{/if}

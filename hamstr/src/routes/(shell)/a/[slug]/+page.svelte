@@ -3,7 +3,7 @@
 	import { goto, invalidateAll } from "$app/navigation";
 	import { page } from "$app/state";
 	import { api } from "#lib/client/api.ts";
-	import { appMenu, downloadItem as download, grainAction, grainMenu } from "#lib/client/actions.ts";
+	import { appMenu, downloadItem as download, crumbAction, crumbMenu } from "#lib/client/actions.ts";
 	import { askUninstall, contextMenu, oops, toast } from "#lib/client/ui.svelte.ts";
 	import { ICON, sized } from "@hamstr/ui/icons.ts";
 	import { shortDate, timeAgo } from "@hamstr/ui/format.ts";
@@ -51,8 +51,8 @@
 		if (creating) return;
 		creating = true;
 		try {
-			const { grain } = await api("/api/grains", { method: "POST", body: { slug: app.slug } });
-			await goto(`/g/${grain.id}`);
+			const { crumb } = await api("/api/crumbs", { method: "POST", body: { slug: app.slug } });
+			await goto(`/c/${crumb.id}`);
 		} catch (err) {
 			oops(err);
 		} finally {
@@ -62,16 +62,16 @@
 
 	let renaming = $state(null);
 	let newTitle = $state("");
-	function startRename(grain) {
-		renaming = grain;
-		newTitle = grain.title;
+	function startRename(crumb) {
+		renaming = crumb;
+		newTitle = crumb.title;
 	}
 	async function rename(event) {
 		event.preventDefault();
 		const title = newTitle.trim();
 		if (!title || title === renaming.title) return void (renaming = null);
 		try {
-			await api(`/api/grains/${renaming.id}`, { method: "PATCH", body: { title } });
+			await api(`/api/crumbs/${renaming.id}`, { method: "PATCH", body: { title } });
 			renaming = null;
 			await invalidateAll();
 		} catch (err) {
@@ -85,7 +85,7 @@
 	async function remove() {
 		deleting = true;
 		try {
-			await api(`/api/grains/${confirming.id}`, { method: "DELETE" });
+			await api(`/api/crumbs/${confirming.id}`, { method: "DELETE" });
 			confirming = null;
 			toast("Deleted for good");
 			await invalidateAll();
@@ -96,25 +96,25 @@
 		}
 	}
 
-	function menuFor(grain) {
+	function menuFor(crumb) {
 		if (tab === "trash") {
 			return [
-				{ label: "Restore", icon: "restore", onclick: () => grainAction(grain, "restore", "Restored") },
-				{ label: "Delete forever…", icon: "trash", danger: true, separator: true, onclick: () => (confirming = grain) },
+				{ label: "Restore", icon: "restore", onclick: () => crumbAction(crumb, "restore", "Restored") },
+				{ label: "Delete forever…", icon: "trash", danger: true, separator: true, onclick: () => (confirming = crumb) },
 			];
 		}
-		return grainMenu(grain, { rename: startRename, app });
+		return crumbMenu(crumb, { rename: startRename, app });
 	}
 
 	// The app itself: a right click on the hero, or its ⋯ button.
 	const heroMenu = $derived(appMenu(app, { admin: data.admin, here: "app" }).slice(2));
 
-	const subtitle = (grain) =>
+	const subtitle = (crumb) =>
 		tab === "trash"
-			? `Trashed ${timeAgo(grain.trashedAt)}`
-			: grain.openedAt
-				? `Opened ${timeAgo(grain.openedAt)}`
-				: `Created ${timeAgo(grain.createdAt)}`;
+			? `Trashed ${timeAgo(crumb.trashedAt)}`
+			: crumb.openedAt
+				? `Opened ${timeAgo(crumb.openedAt)}`
+				: `Created ${timeAgo(crumb.createdAt)}`;
 
 	// "/" searches, "n" makes a new one, like a desktop app.
 	function onkeydown(event) {
@@ -213,22 +213,22 @@
 						<span class="plus">+</span><span class="tile-title">New</span>
 					</button>
 				{/if}
-				{#each items as grain (grain.id)}
-					<div class="tile-wrap" use:contextMenu={() => menuFor(grain)}>
+				{#each items as crumb (crumb.id)}
+					<div class="tile-wrap" use:contextMenu={() => menuFor(crumb)}>
 						{#if tab === "trash"}
 							<div class="tile trashed">
-								<AppIcon app={grain.app} />
-								<span class="tile-title">{grain.title}</span>
-								<span class="tile-meta">{subtitle(grain)}</span>
+								<AppIcon app={crumb.app} />
+								<span class="tile-title">{crumb.title}</span>
+								<span class="tile-meta">{subtitle(crumb)}</span>
 							</div>
 						{:else}
-							<a class="tile" href="/g/{grain.id}" title={grain.title}>
-								<AppIcon app={grain.app} />
-								<span class="tile-title">{grain.title}</span>
-								<span class="tile-meta">{subtitle(grain)}</span>
+							<a class="tile" href="/c/{crumb.id}" title={crumb.title}>
+								<AppIcon app={crumb.app} />
+								<span class="tile-title">{crumb.title}</span>
+								<span class="tile-meta">{subtitle(crumb)}</span>
 							</a>
 						{/if}
-						<MoreMenu items={menuFor(grain)} label="Actions for {grain.title}" extra="tile-more" />
+						<MoreMenu items={menuFor(crumb)} label="Actions for {crumb.title}" extra="tile-more" />
 					</div>
 				{/each}
 			</div>
@@ -241,26 +241,26 @@
 					<span class="col hide-sm">{tab === "trash" ? "Trashed" : "Last opened"}</span>
 					<span class="actions-col"></span>
 				</div>
-				{#each items as grain (grain.id)}
-					<div class="row" data-id={grain.id} use:contextMenu={() => menuFor(grain)}>
-						<AppIcon app={grain.app} />
+				{#each items as crumb (crumb.id)}
+					<div class="row" data-id={crumb.id} use:contextMenu={() => menuFor(crumb)}>
+						<AppIcon app={crumb.app} />
 						<div class="grow">
 							{#if tab === "trash"}
-								<strong>{grain.title}</strong>
+								<strong>{crumb.title}</strong>
 							{:else}
-								<a class="row-link" href="/g/{grain.id}">{grain.title}</a>
+								<a class="row-link" href="/c/{crumb.id}">{crumb.title}</a>
 							{/if}
-							<div class="dim small show-sm">{subtitle(grain)}</div>
+							<div class="dim small show-sm">{subtitle(crumb)}</div>
 						</div>
-						<span class="col dim small hide-sm">{shortDate(grain.createdAt)}</span>
-						<span class="col dim small hide-sm">{tab === "trash" ? timeAgo(grain.trashedAt) : grain.openedAt ? timeAgo(grain.openedAt) : "Never"}</span>
+						<span class="col dim small hide-sm">{shortDate(crumb.createdAt)}</span>
+						<span class="col dim small hide-sm">{tab === "trash" ? timeAgo(crumb.trashedAt) : crumb.openedAt ? timeAgo(crumb.openedAt) : "Never"}</span>
 						<span class="actions-col">
 							{#if tab === "trash"}
-								<button type="button" class="icon-button" title="Restore" aria-label="Restore {grain.title}" onclick={() => grainAction(grain, "restore", "Restored")}>{@html ICON.restore}</button>
+								<button type="button" class="icon-button" title="Restore" aria-label="Restore {crumb.title}" onclick={() => crumbAction(crumb, "restore", "Restored")}>{@html ICON.restore}</button>
 							{:else if tab === "mine" && app.canExport}
-								<button type="button" class="icon-button hide-sm" title="Download data" aria-label="Download data of {grain.title}" onclick={() => download(grain)}>{@html ICON.download}</button>
+								<button type="button" class="icon-button hide-sm" title="Download data" aria-label="Download data of {crumb.title}" onclick={() => download(crumb)}>{@html ICON.download}</button>
 							{/if}
-							<MoreMenu items={menuFor(grain)} label="Actions for {grain.title}" />
+							<MoreMenu items={menuFor(crumb)} label="Actions for {crumb.title}" />
 						</span>
 					</div>
 				{/each}

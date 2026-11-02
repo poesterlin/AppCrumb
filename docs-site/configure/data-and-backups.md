@@ -6,7 +6,7 @@ Everything Hamstr knows is in one directory: `/data` in the container.
 /data
 ├── s3/           the bucket: every site's code, assets and Durable Object data
 ├── celld/        celld's local working copy (rebuildable from the bucket)
-├── hamstr/       accounts, people, grains, the shell's database
+├── hamstr/       accounts, people, crumbs, the shell's database
 ├── tls/          certificate, key and hostname
 ├── names/        names-service registration and token
 └── secrets.env   generated on first start
@@ -68,15 +68,15 @@ docker compose up -d
 The bucket, the accounts and the generated secrets come back together. If you restore into a container with a
 different `HAMSTR_HOST`, the certificate is reissued on start; data is unaffected.
 
-## Per-grain backups
+## Per-crumb backups
 
-Every grain has its own backup in Hamstr:
+Every crumb has its own backup in Hamstr:
 
-- **Download backup** writes a `.hamstr-backup` file: a header (app, version, item name, time) and the grain's
+- **Download backup** writes a `.hamstr-backup` file: a header (app, version, item name, time) and the crumb's
   objects — every table and stored key, no app code.
-- **Restore from backup…** replaces that grain's data. Hamstr takes a safety copy first, holds the grain's traffic
+- **Restore from backup…** replaces that crumb's data. Hamstr takes a safety copy first, holds the crumb's traffic
   (503) while it restores, and puts the safety copy back if anything fails.
-- An app's page can **Import a backup…** into a new grain.
+- An app's page can **Import a backup…** into a new crumb.
 
 A backup only goes into the same app, and not into an older app version than the one that made it. Update the app
 first.
@@ -91,7 +91,7 @@ Two things grow without bound unless you attend to them:
 1. **Site versions.** Old versions stay until pruned. The compose stack's `tools/admin.sh` prunes them. The appliance
    keeps them too and has no prune UI, so watch the volume there.
 2. **Write logs.** Each database write adds a few KB to the bucket. celld 0.6.3 garbage-collects the router's logs
-   but not Durable Object facets, so grain data grows slowly with use. Watch the volume size.
+   but not Durable Object facets, so crumb data grows slowly with use. Watch the volume size.
 
 Also watch the isolate memory: a large app stays resident after use. `CELLD_V8_HEAP_LIMIT_MB` and the container's
 memory limit decide when celld starts shedding objects.
@@ -103,5 +103,5 @@ memory limit decide when celld starts shedding objects.
 3. Start once with the same hostname (or accept a new certificate).
 4. Restore `/data` and start again.
 
-Keep the hostname, or update `HAMSTR_HOST` and `HAMSTR_GRAIN_DOMAIN` and re-register the OIDC redirect URI at the
-provider. Grain addresses change with the domain.
+Keep the hostname, or update `HAMSTR_HOST` and `HAMSTR_CRUMB_DOMAIN` and re-register the OIDC redirect URI at the
+provider. Crumb addresses change with the domain.

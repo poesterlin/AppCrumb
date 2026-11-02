@@ -56,7 +56,7 @@ same time. See the repository's
 
 | | Update | Recreate the container |
 | --- | --- | --- |
-| App code and grain data | yes | yes |
+| App code and crumb data | yes | yes |
 | Accounts and people | yes | yes |
 | Certificate and names registration | yes | yes |
 | Generated platform secrets | yes | yes |

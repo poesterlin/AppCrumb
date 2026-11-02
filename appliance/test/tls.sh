@@ -78,10 +78,10 @@ resolve() { echo "--resolve $1:8443:127.0.0.1"; }
 code=$(c $(resolve "$HOST") "https://$HOST:8443/api/health")
 [ "$code" = 200 ] || fail "shell over HTTPS: $code"
 echo "https://$HOST → Hamstr 200 (certificate verified)"
-code=$(c $(resolve "grain-abcdefabcdef.$HOST") "https://grain-abcdefabcdef.$HOST:8443/")
-# Hamstr answers 404 for a grain it does not know; its log shows it was Hamstr.
-[ "$code" = 404 ] && docker logs "$RUN" 2>&1 | grep -q "GET grain-abcdefabcdef.$HOST/ 404" || fail "grain over HTTPS: $code"
-echo "https://grain-….$HOST → Hamstr's grain proxy (wildcard verified)"
+code=$(c $(resolve "crumb-abcdefabcdef.$HOST") "https://crumb-abcdefabcdef.$HOST:8443/")
+# Hamstr answers 404 for a crumb it does not know; its log shows it was Hamstr.
+[ "$code" = 404 ] && docker logs "$RUN" 2>&1 | grep -q "GET crumb-abcdefabcdef.$HOST/ 404" || fail "crumb over HTTPS: $code"
+echo "https://crumb-….$HOST → Hamstr's crumb proxy (wildcard verified)"
 code=$(c $(resolve "blog.$HOST") "https://blog.$HOST:8443/")
 [ "$code" = 404 ] || fail "other name: $code"
 echo "https://blog.$HOST → celld router, 404 (no such site)"

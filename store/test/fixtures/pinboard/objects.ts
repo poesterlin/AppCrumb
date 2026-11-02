@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-/** One object ("board") per grain. A grain is its own celld site, so this name
+/** One object ("board") per crumb. A crumb is its own celld site, so this name
  *  never collides with another board's. */
 export class Board extends DurableObject {
 	constructor(ctx, env) {

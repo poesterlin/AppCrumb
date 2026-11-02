@@ -34,7 +34,7 @@ addresses, which only the install's own devices can reach.
 | `domain` | one user who wants no third party | `DOMAIN`, `DNS_PROVIDER` plus that provider's variables (`lego dnshelp`), and a `*.DOMAIN` record pointing at the install | only your DNS provider |
 
 What is public in every mode: certificates from a public CA land in the
-Certificate Transparency logs (the wildcard keeps grain names out, the hostname
+Certificate Transparency logs (the wildcard keeps crumb names out, the hostname
 is in), and public DNS shows the install's private address. To keep the address
 out of public DNS in `domain` mode, serve the A records inside the tailnet only
 (Tailscale split DNS) and leave only the challenge TXT records public.

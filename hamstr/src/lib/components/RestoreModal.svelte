@@ -11,9 +11,9 @@
 	import Modal from "@hamstr/ui/components/Modal.svelte";
 	import AppIcon from "@hamstr/ui/components/AppIcon.svelte";
 
-	const grain = $derived(restoreState.grain);
+	const crumb = $derived(restoreState.crumb);
 	const app = $derived(restoreState.app);
-	const importing = $derived(!grain);
+	const importing = $derived(!crumb);
 
 	let file = $state(null);
 	let header = $state(null);
@@ -46,15 +46,15 @@
 	}
 
 	function close() {
-		if (!busy) Object.assign(restoreState, { grain: null, app: null });
+		if (!busy) Object.assign(restoreState, { crumb: null, app: null });
 	}
 
 	async function upload() {
 		busy = true;
 		// Captured now: closing the dialog clears the state these derive from.
 		const isImport = importing;
-		const item = grain;
-		const path = isImport ? `/api/apps/${app.slug}/import` : `/api/grains/${item.id}/backup`;
+		const item = crumb;
+		const path = isImport ? `/api/apps/${app.slug}/import` : `/api/crumbs/${item.id}/backup`;
 		try {
 			const res = await fetch(path, {
 				method: isImport ? "POST" : "PUT",
@@ -65,15 +65,15 @@
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new ApiError(res.status, data.error ?? `Restore failed (${res.status})`);
 			busy = false;
-			const target = isImport ? data.grain : item;
-			Object.assign(restoreState, { grain: null, app: null });
+			const target = isImport ? data.crumb : item;
+			Object.assign(restoreState, { crumb: null, app: null });
 			if (isImport) {
 				toast(`Imported “${target.title}”`);
-				await goto(`/g/${target.id}`);
+				await goto(`/c/${target.id}`);
 			} else {
 				toast(`Restored “${target.title}” from the backup of ${when(header.at)}`);
 				// An open item reloads, so its frame shows the restored data.
-				if (page.url.pathname === `/g/${target.id}`) location.reload();
+				if (page.url.pathname === `/c/${target.id}`) location.reload();
 				else await invalidateAll();
 			}
 		} catch (err) {
@@ -92,14 +92,14 @@
 </script>
 
 {#if app}
-	<Modal title={importing ? `Import a ${app.name} backup` : `Restore “${grain.title}”`} onclose={close}>
+	<Modal title={importing ? `Import a ${app.name} backup` : `Restore “${crumb.title}”`} onclose={close}>
 		<div class="card-head gap-bottom">
 			<AppIcon {app} />
 			<p class="dim flush">
 				{#if importing}
 					Makes a new {app.name} from a backup file, with everything that was in it.
 				{:else}
-					Replaces everything in “{grain.title}” with what is in a backup. Take a backup of it first if you may want today's version back.
+					Replaces everything in “{crumb.title}” with what is in a backup. Take a backup of it first if you may want today's version back.
 				{/if}
 			</p>
 		</div>

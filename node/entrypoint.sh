@@ -53,13 +53,13 @@ rm -f "$work/wrangler.template.json" "$work/tsconfig.json"
 # the bucket, which the dashboard can read.
 admin_hash=$(printf '%s' "$ADMIN_TOKEN" | sha256sum | cut -d' ' -f1)
 read_hash=$(printf '%s' "$READ_TOKEN" | sha256sum | cut -d' ' -f1)
-# Grain sites (PROXY_SITE_PREFIX) answer only requests from the Hamstr proxy.
+# Crumb sites (PROXY_SITE_PREFIX) answer only requests from the Hamstr proxy.
 # Without PROXY_TOKEN they answer nobody, which is the safe default.
 proxy_hash=""
 [ -n "${PROXY_TOKEN:-}" ] && proxy_hash=$(printf '%s' "$PROXY_TOKEN" | sha256sum | cut -d' ' -f1)
 sed -e "s/@ADMIN_TOKEN_SHA256@/$admin_hash/" -e "s/@READ_TOKEN_SHA256@/$read_hash/" -e "s/@ADMIN_HOST@/$ADMIN_HOST/" -e "s/@DEFAULT_SITE@//" -e "s#@OPERATOR_URL@#http://${CELLD_INTERNAL_LISTEN:-127.0.0.1:8081}#" -e "s/@SITE_TIMEOUT_SECS@/${SITE_TIMEOUT_SECS:-30}/" \
 	-e "s/@SITE_MAX_INFLIGHT@/${SITE_MAX_INFLIGHT:-128}/" -e "s/@SITE_MAX_OBJECTS@/${SITE_MAX_OBJECTS:-1000}/" -e "s/@SITE_MAX_SUBREQUESTS@/${SITE_MAX_SUBREQUESTS:-1000}/" \
-	-e "s/@PROXY_TOKEN_SHA256@/$proxy_hash/" -e "s/@PROXY_SITE_PREFIX@/${PROXY_SITE_PREFIX-grain-}/" \
+	-e "s/@PROXY_TOKEN_SHA256@/$proxy_hash/" -e "s/@PROXY_SITE_PREFIX@/${PROXY_SITE_PREFIX-crumb-}/" \
 	-e "s#@AUTH_URL@#${AUTH_URL:-}#" -e "s/@AUTH_KEY@/${AUTH_KEY:-}/" \
 	/app/router/wrangler.template.json > "$work/wrangler.json"
 log "deploying the router"

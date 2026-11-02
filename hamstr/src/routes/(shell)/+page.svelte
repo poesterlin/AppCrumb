@@ -4,9 +4,9 @@
 	import { page } from "$app/state";
 	import { api } from "#lib/client/api.ts";
 	import { contextMenu, oops } from "#lib/client/ui.svelte.ts";
-	import { appMenu, grainMenu } from "#lib/client/actions.ts";
+	import { appMenu, crumbMenu } from "#lib/client/actions.ts";
 	import { greeting, today } from "@hamstr/ui/format.ts";
-	import GrainTile from "#lib/components/GrainTile.svelte";
+	import CrumbTile from "#lib/components/CrumbTile.svelte";
 	import AppIcon from "@hamstr/ui/components/AppIcon.svelte";
 
 	let { data } = $props();
@@ -20,15 +20,15 @@
 		date = today();
 	});
 
-	// A single-instance app opens straight into its one grain (made on first open).
+	// A single-instance app opens straight into its one crumb (made on first open).
 	let opening = $state("");
 	async function openSingle(event, app) {
 		event.preventDefault();
 		if (opening) return;
 		opening = app.slug;
 		try {
-			const { grain } = await api(`/api/apps/${app.slug}/open`, { method: "POST", body: {} });
-			await goto(`/g/${grain.id}`);
+			const { crumb } = await api(`/api/apps/${app.slug}/open`, { method: "POST", body: {} });
+			await goto(`/c/${crumb.id}`);
 		} catch (err) {
 			oops(err);
 		} finally {
@@ -85,8 +85,8 @@
 			<div class="section">
 				<h2>Recent</h2>
 				<div class="tiles">
-					{#each data.recent as grain (grain.id)}
-						<GrainTile {grain} menu={() => grainMenu(grain, { app: bySlug.get(grain.app.slug) })} />
+					{#each data.recent as crumb (crumb.id)}
+						<CrumbTile {crumb} menu={() => crumbMenu(crumb, { app: bySlug.get(crumb.app.slug) })} />
 					{/each}
 				</div>
 			</div>

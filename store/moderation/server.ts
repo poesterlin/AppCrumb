@@ -8,18 +8,21 @@
 // store uses) and every one is logged with the moderator's name.
 //
 // It needs: DATABASE_URL (the store's database), the store's data volume
-// read-only (STORE_DATA_DIR, for the bundles) and MODERATION_PASSWORD. Keep it
-// off the internet: it holds the keys to the catalog.
+// read-only (STORE_DATA_DIR, for the bundles) and either MODERATION_PASSWORD
+// or MODERATION_OIDC_* (Tailscale / any OIDC IdP). Keep it off the internet:
+// it holds the keys to the catalog.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { clientIp as visitorIp, parseTrustedProxies } from "../client-ip.ts";
 import { type Db, migrate, openDb } from "../db.ts";
 import { logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, rejectRelease, suspendPublisher, unsuspendPublisher, writeSetting } from "../releases.ts";
 import { bundleFiles, createChecker, DEFAULT_POLICY, type Policy } from "./checks.ts";
 import type { ClassifierConfig } from "./jev.ts";
+import { createOidc, OidcError, pkce, profileAllowed, type OidcConfig } from "./oidc.ts";
 import { ago, csrfField, esc, findingsList, layout, loginPage, riskChip, size, statusChip } from "./pages.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +101,17 @@ pre.file { background: var(--surface); border: 1px solid var(--line); border-rad
 @media (max-width: 420px) { .hide-xs { display: none; } }
 `;
 
+export interface ModerationOidcOptions {
+	issuer: string;
+	clientId: string;
+	clientSecret: string;
+	/** Public origin of this site, used to build the redirect URI. */
+	publicUrl: string;
+	name?: string;
+	/** Comma-separated emails, usernames or subjects; empty = anyone from the IdP. */
+	allow?: string;
+}
+
 export interface ModerationOptions {
 	port?: number | string;
 	host?: string;
@@ -105,12 +119,37 @@ export interface ModerationOptions {
 	db?: Db;
 	dataDir?: string;
 	password?: string;
+	oidc?: ModerationOidcOptions | null;
 	storeUrl?: string;
 	policy?: Partial<Policy>;
 	classifier?: ClassifierConfig | null;
 	/** Run the check worker (tests drive it by hand). */
 	worker?: boolean;
 	logging?: boolean;
+}
+
+export function oidcFromEnv(env = process.env): ModerationOidcOptions | null {
+	const get = (key: string) => String(env[key] ?? "").trim();
+	const issuer = get("MODERATION_OIDC_ISSUER");
+	const clientId = get("MODERATION_OIDC_CLIENT_ID");
+	const clientSecret = get("MODERATION_OIDC_CLIENT_SECRET");
+	const publicUrl = get("MODERATION_PUBLIC_URL").replace(/\/+$/, "");
+	const required = [issuer, clientId, clientSecret, publicUrl];
+	if (required.every((v) => !v)) return null;
+	if (required.some((v) => !v)) {
+		throw new Error("set MODERATION_OIDC_ISSUER, MODERATION_OIDC_CLIENT_ID, MODERATION_OIDC_CLIENT_SECRET and MODERATION_PUBLIC_URL together");
+	}
+	const issuerOk = /^https:\/\//i.test(issuer) || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])\b/i.test(issuer);
+	if (!issuerOk) throw new Error("MODERATION_OIDC_ISSUER must be https:// (or http on loopback for tests)");
+	if (!/^https?:\/\//i.test(publicUrl)) throw new Error("MODERATION_PUBLIC_URL must be an http(s) origin");
+	return {
+		issuer,
+		clientId,
+		clientSecret,
+		publicUrl,
+		name: get("MODERATION_OIDC_NAME") || undefined,
+		allow: get("MODERATION_OIDC_ALLOW") || undefined,
+	};
 }
 
 const flag = (value: string | undefined, fallback: boolean) => (value === undefined || value === "" ? fallback : value === "1" || value === "true");
@@ -139,23 +178,46 @@ class HttpError extends Error {
 	}
 }
 
+// fallow-ignore-next-line complexity
 export function createModeration(options: ModerationOptions = {}) {
+	const oidcOpts = options.oidc === undefined ? oidcFromEnv() : options.oidc;
+	const password = options.password ?? process.env.MODERATION_PASSWORD ?? "";
 	const config = {
 		port: Number(options.port ?? process.env.PORT ?? 3000),
 		host: options.host ?? process.env.HOST ?? "0.0.0.0",
 		databaseUrl: options.databaseUrl ?? process.env.DATABASE_URL ?? "",
 		dataDir: resolve(options.dataDir ?? process.env.STORE_DATA_DIR ?? "/data"),
-		password: options.password ?? process.env.MODERATION_PASSWORD ?? "",
+		password,
+		oidc: oidcOpts,
 		storeUrl: String(options.storeUrl ?? process.env.STORE_PUBLIC_URL ?? "").replace(/\/+$/, ""),
 		policy: { ...policyFromEnv(), ...options.policy },
 		classifier: options.classifier === undefined ? classifierFromEnv() : options.classifier,
 		worker: options.worker !== false,
 		logging: options.logging !== false,
 	};
-	if (config.password.length < 12) throw new Error("set MODERATION_PASSWORD (12 or more characters)");
+	if (config.oidc) {
+		if (!/^https:\/\//i.test(config.oidc.issuer) && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])\b/i.test(config.oidc.issuer)) {
+			throw new Error("OIDC issuer must be https:// (or http on loopback for tests)");
+		}
+	} else if (config.password.length < 12) {
+		throw new Error("set MODERATION_PASSWORD (12 or more characters), or MODERATION_OIDC_* for OIDC sign-in");
+	}
 	if (!options.db && !config.databaseUrl) throw new Error("set DATABASE_URL to the store's database");
 	const blobsDir = join(config.dataDir, "blobs");
 	const blobFile = (sha: string) => join(blobsDir, `${sha}.tgz`);
+	const oidcName = config.oidc ? config.oidc.name || (/\.ts\.net\/?$/i.test(config.oidc.issuer) ? "Tailscale" : "OIDC") : "";
+	const oidcAllow = (config.oidc?.allow ?? "")
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	const oidcClient = config.oidc
+		? createOidc({
+				issuer: config.oidc.issuer,
+				clientId: config.oidc.clientId,
+				clientSecret: config.oidc.clientSecret,
+				redirectUri: `${config.oidc.publicUrl.replace(/\/+$/, "")}/auth/callback`,
+			} satisfies OidcConfig)
+		: null;
 
 	let db: Db = options.db ?? null;
 	let checker: ReturnType<typeof createChecker> = null;
@@ -169,8 +231,14 @@ export function createModeration(options: ModerationOptions = {}) {
 
 	// --- sessions: in memory, a restart signs everyone out ----------------------
 	const sessions = new Map<string, { name: string; csrf: string; expires: number }>();
+	const pendingOidc = new Map<string, { verifier: string; nonce: string; expires: number }>();
 	const digest = (s: string) => createHash("sha256").update(s).digest();
-	const passwordOk = (given: string) => timingSafeEqual(digest(given), digest(config.password));
+	const passwordOk = (given: string) => {
+		if (!config.password || config.password.length < 12) return false;
+		const a = digest(given);
+		const b = digest(config.password);
+		return a.length === b.length && timingSafeEqual(a, b);
+	};
 	const attempts = new Map<string, { n: number; reset: number }>();
 	const tooManyAttempts = (ip: string) => {
 		const at = Date.now();
@@ -192,6 +260,16 @@ export function createModeration(options: ModerationOptions = {}) {
 		}
 		return { id, ...s };
 	}
+	const loginUi = (error?: string) => loginPage(error, { oidcName: oidcName || undefined, password: !config.oidc });
+	const issueSession = async (name: string, ip: string, res: ServerResponse, req: IncomingMessage) => {
+		const id = randomBytes(24).toString("base64url");
+		sessions.set(id, { name, csrf: randomBytes(18).toString("base64url"), expires: Date.now() + SESSION_HOURS * 3600_000 });
+		await logEvent(db, name, "moderator.sign-in", "moderation", ip);
+		// OIDC returns from another site, so Lax; password is same-site Strict.
+		const sameSite = config.oidc ? "Lax" : "Strict";
+		const secure = req.headers["x-forwarded-proto"] === "https" || Boolean(config.oidc) ? "; Secure" : "";
+		return redirect(res, "/", { "set-cookie": `mod_session=${id}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=${SESSION_HOURS * 3600}${secure}` });
+	};
 
 	// --- helpers ------------------------------------------------------------------
 	const HEADERS = {
@@ -647,6 +725,7 @@ export function createModeration(options: ModerationOptions = {}) {
 	}
 
 	// --- HTTP -------------------------------------------------------------------------
+	// fallow-ignore-next-line complexity
 	const server = createServer(async (req, res) => {
 		let url: URL;
 		try {
@@ -665,21 +744,66 @@ export function createModeration(options: ModerationOptions = {}) {
 			if (pathname === "/ui.css") return send(res, 200, uiCss, "text/css; charset=utf-8", { "cache-control": "public, max-age=300" });
 			if (pathname === "/moderation.css") return send(res, 200, CSS, "text/css; charset=utf-8", { "cache-control": "public, max-age=300" });
 
-			const header = String(process.env.STORE_CLIENT_IP_HEADER ?? "").toLowerCase();
-			const ip = (header && String(req.headers[header] ?? "").trim()) || String(req.headers["x-forwarded-for"] ?? "").split(",").pop()?.trim() || req.socket.remoteAddress || "?";
+			const ip = visitorIp(req, {
+				clientIpHeader: String(process.env.STORE_CLIENT_IP_HEADER ?? "").toLowerCase(),
+				proxySecret: String(process.env.STORE_PROXY_SECRET ?? ""),
+				trustedProxies: parseTrustedProxies(process.env.STORE_TRUSTED_PROXIES),
+			});
 			if (pathname === "/login") {
-				if (method === "GET") return send(res, 200, loginPage());
+				if (method === "GET") {
+					if (config.oidc && url.searchParams.get("go") === "1") return redirect(res, "/auth/start");
+					return send(res, 200, loginUi());
+				}
+				if (config.oidc) throw new HttpError(405, "use Sign in with " + oidcName);
 				if (method !== "POST") throw new HttpError(405, "method not allowed");
-				if (tooManyAttempts(ip)) return send(res, 429, loginPage("Too many attempts. Wait a few minutes."));
+				if (tooManyAttempts(ip)) return send(res, 429, loginUi("Too many attempts. Wait a few minutes."));
 				const form = await readForm(req);
 				const name = String(form.get("name") ?? "").trim();
-				if (!/^[\p{L}\p{N} ._-]{2,30}$/u.test(name)) return send(res, 400, loginPage("Use 2 to 30 letters, digits, spaces, dots or dashes for your name."));
-				if (!passwordOk(String(form.get("password") ?? ""))) return send(res, 401, loginPage("Wrong password."));
-				const id = randomBytes(24).toString("base64url");
-				sessions.set(id, { name, csrf: randomBytes(18).toString("base64url"), expires: Date.now() + SESSION_HOURS * 3600_000 });
-				await logEvent(db, name, "moderator.sign-in", "moderation", ip);
-				const secure = req.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
-				return redirect(res, "/", { "set-cookie": `mod_session=${id}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_HOURS * 3600}${secure}` });
+				if (!/^[\p{L}\p{N} ._-]{2,30}$/u.test(name)) return send(res, 400, loginUi("Use 2 to 30 letters, digits, spaces, dots or dashes for your name."));
+				if (!passwordOk(String(form.get("password") ?? ""))) return send(res, 401, loginUi("Wrong password."));
+				return issueSession(name, ip, res, req);
+			}
+			if (pathname === "/auth/start") {
+				if (!oidcClient || !config.oidc) throw new HttpError(404, "OIDC sign-in is not configured");
+				if (method !== "GET") throw new HttpError(405, "method not allowed");
+				if (tooManyAttempts(ip)) return send(res, 429, loginUi("Too many attempts. Wait a few minutes."));
+				const state = randomBytes(24).toString("base64url");
+				const nonce = randomBytes(24).toString("base64url");
+				const { verifier, challenge } = pkce();
+				pendingOidc.set(state, { verifier, nonce, expires: Date.now() + 10 * 60_000 });
+				for (const [k, v] of pendingOidc) if (v.expires < Date.now()) pendingOidc.delete(k);
+				try {
+					return redirect(res, await oidcClient.start({ state, nonce, challenge }));
+				} catch (err) {
+					const message = err instanceof OidcError ? err.message : "could not start sign-in";
+					return send(res, 502, loginUi(message));
+				}
+			}
+			if (pathname === "/auth/callback") {
+				if (!oidcClient || !config.oidc) throw new HttpError(404, "OIDC sign-in is not configured");
+				if (method !== "GET") throw new HttpError(405, "method not allowed");
+				const state = String(url.searchParams.get("state") ?? "");
+				const pending = state ? pendingOidc.get(state) : null;
+				pendingOidc.delete(state);
+				if (!pending || pending.expires < Date.now()) return send(res, 400, loginUi("Sign-in expired; try again."));
+				if (url.searchParams.get("error")) {
+					const why = String(url.searchParams.get("error_description") || url.searchParams.get("error") || "denied");
+					return send(res, 401, loginUi(`Provider refused sign-in (${why}).`));
+				}
+				try {
+					const profile = await oidcClient.finish({
+						params: url.searchParams,
+						state,
+						verifier: pending.verifier,
+						nonce: pending.nonce,
+					});
+					if (!profileAllowed(profile, oidcAllow)) return send(res, 403, loginUi("Your account is not allowed to moderate."));
+					const name = (profile.name || profile.username || profile.email || "moderator").slice(0, 80);
+					return issueSession(name, ip, res, req);
+				} catch (err) {
+					const message = err instanceof OidcError ? err.message : "sign-in failed";
+					return send(res, 401, loginUi(message));
+				}
 			}
 
 			const me = sessionOf(req);
@@ -699,7 +823,8 @@ export function createModeration(options: ModerationOptions = {}) {
 				if (token.length !== me.csrf.length || !timingSafeEqual(Buffer.from(token), Buffer.from(me.csrf))) throw new HttpError(403, "the form expired; reload the page");
 				if (pathname === "/logout") {
 					sessions.delete(me.id);
-					return redirect(res, "/login", { "set-cookie": "mod_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" });
+					const sameSite = config.oidc ? "Lax" : "Strict";
+					return redirect(res, "/login", { "set-cookie": `mod_session=; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=0` });
 				}
 				const { to, flash } = await act(me, pathname, form);
 				return redirect(res, `${to}${to.includes("?") ? "&" : "?"}done=${encodeURIComponent(flash)}`);

@@ -1,11 +1,11 @@
 // One process answers two kinds of hostname:
 //   HAMSTR_HOST            the shell: UI, JSON API, sign-in
-//   grain-<id>.<domain>    a grain: /.hamstr/enter, then everything is proxied
+//   crumb-<id>.<domain>    a crumb: /.hamstr/enter, then everything is proxied
 // Anything else is not ours. This hook routes on the Host header before
 // SvelteKit's router, and adds the shell's security headers to every answer.
 import { core } from "#lib/server/instance.ts";
 import { csp, cspExtras, json } from "#lib/server/http.ts";
-import { grainRequest } from "../lib/proxy.ts";
+import { crumbRequest } from "../lib/proxy.ts";
 
 const BODYLESS = new Set([101, 204, 205, 304]);
 
@@ -35,8 +35,8 @@ export async function handle({ event, resolve }) {
 	const host = (event.request.headers.get("host") ?? "")
 		.toLowerCase()
 		.replace(/:\d+$/, "");
-	const grain = c.grainPattern.exec(host);
-	if (grain) return grainRequest(event, grain[1]);
+	const crumb = c.crumbPattern.exec(host);
+	if (crumb) return crumbRequest(event, crumb[1]);
 	// Home mode: the shell answers on any hostname (an IP, homeassistant.local…).
 	if (host !== c.config.shellHost && !c.home) {
 		if (event.url.pathname === "/api/health") return json(c, 200, { ok: true });

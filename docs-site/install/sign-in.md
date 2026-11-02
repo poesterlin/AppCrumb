@@ -67,7 +67,7 @@ The appliance does not bundle tsidp. Point it at any OIDC issuer, including a ts
 
 ## Sign-in for plain sites
 
-Hamstr also signs people in for celld sites that declare it, not only for grains. A site with
+Hamstr also signs people in for celld sites that declare it, not only for crumbs. A site with
 `"auth": "required"` in `celld.json` sends visitors to Hamstr; **Settings → Sites** decides who may enter.
 
 That path uses two shared settings in the compose stack:

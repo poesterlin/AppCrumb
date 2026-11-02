@@ -25,7 +25,7 @@ browser → Traefik → celld (router) → site → its Durable Objects
 | `node/` | The celld node image | core |
 | `tools/` | Deploy, preview, admin and backup scripts | core |
 | `sites/` | Example sites, each with a `RECIPE.md` | core (templates) |
-| `hamstr/` | Hamstr: grains, accounts, sign-in | core |
+| `hamstr/` | Hamstr: crumbs, accounts, sign-in | core |
 | `store/` | The Hamstr Store and the `hamstr` CLI | core |
 | `appliance/` | Everything in one container | core |
 | `ha-addon/` | The Home Assistant add-on wrapper | optional |
@@ -155,7 +155,7 @@ printf '["api.example.com"]\n' | tools/admin.sh PUT '/egress?host=blog.example.c
 
 ## Hamstr and the store
 
-- [hamstr/README.md](../hamstr/README.md): grains, accounts and sign-in.
+- [hamstr/README.md](../hamstr/README.md): crumbs, accounts and sign-in.
 - [store/README.md](../store/README.md): the store, publishing, the CLI and moderation.
 
 ## EmDash sites (experimental)

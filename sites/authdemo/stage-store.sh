@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stages the store build of this site in <out-dir>: the built output, hamstr.json
-# and a celld.json WITHOUT "auth". Inside a Hamstr grain, Hamstr signs people in;
+# and a celld.json WITHOUT "auth". Inside a Hamstr crumb, Hamstr signs people in;
 # "auth" would make the router send the frame to the auth service, which refuses
 # framing. The standalone deploy (tools/deploy.sh sites/authdemo <host>) keeps
 # "auth": "required" from this directory's celld.json.

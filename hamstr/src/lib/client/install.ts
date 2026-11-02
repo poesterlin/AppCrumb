@@ -26,7 +26,7 @@ export const secureHere = () => typeof window === "undefined" || window.isSecure
 /** `id` is the store's <publisher>/<app>. */
 export async function install({ id, version, name, update = false, allowEgress = false }) {
 	const result = await api("/api/apps", { method: "POST", body: { id, version, allowEgress } });
-	const failed = result.failedGrains?.length ?? 0;
+	const failed = result.failedCrumbs?.length ?? 0;
 	toast(
 		failed ? `${name} updated, but ${failed} of its items failed to move` : update ? `${name} is now v${version}` : `${name} is on your Home`,
 		failed > 0,

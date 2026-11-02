@@ -26,7 +26,7 @@ nothing because your node runs the app.
 ## How much RAM and disk?
 
 A small install runs in about 1 GB. Each app that has been opened stays resident until celld sheds it; a large Astro
-site takes about 120 MB. Disk: a few hundred MB plus your grains, which grow a few KB per database write.
+site takes about 120 MB. Disk: a few hundred MB plus your crumbs, which grow a few KB per database write.
 
 ## Will it run on a Raspberry Pi?
 
@@ -36,16 +36,16 @@ it an SSD; SD cards and databases get along badly.
 ## Can several people use it?
 
 Yes. People sign in through your provider, the owner approves them, and groups decide who may open which site. Each
-person's grains stay private to them.
+person's crumbs stay private to them.
 
-## Can I share a grain with someone?
+## Can I share a crumb with someone?
 
-No. Share links existed once and were removed. Grains are private to their owner. If you need shared data, use an app
-designed for it (a family board is one grain, used by one person's account) or a plain site with sign-in.
+No. Share links existed once and were removed. Crumbs are private to their owner. If you need shared data, use an app
+designed for it (a family board is one crumb, used by one person's account) or a plain site with sign-in.
 
 ## Do apps see each other's data?
 
-No. Each grain is its own site with its own Durable Objects, and a site cannot address another site's objects even by
+No. Each crumb is its own site with its own Durable Objects, and a site cannot address another site's objects even by
 guessing names. Apps also cannot read each other's cookies (a `Domain` cookie is dropped).
 
 The exception is the runtime itself: isolates share one process. We do not yet claim it can safely contain
@@ -94,16 +94,16 @@ Do not expose home mode at all — it has no authentication. Do not expose the s
 ## What is celld?
 
 The runtime from Deno that runs each site in a Dynamic Worker isolate with Durable Objects. It is alpha. Hamstr is a
-personal platform on top of it: grains, accounts and sign-in.
+personal platform on top of it: crumbs, accounts and sign-in.
 
-## What is a grain?
+## What is a crumb?
 
 One thing you made with an app — a board, a list, a draw — at its own hostname, with its own database. See
-[Apps, grains and data](/guide/concepts).
+[Apps, crumbs and data](/guide/concepts).
 
 ## Why "Hamstr"?
 
-A hamster hoards grains. So does Hamstr.
+A hamster hoards crumbs. So does Hamstr.
 
 ## How do I update?
 

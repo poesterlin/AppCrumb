@@ -158,7 +158,7 @@
 							<strong>On this Hamstr</strong>
 							<p class="dim small flush">
 								Installed {shortDate(installed.installedAt)}{installed.updatedAt !== installed.installedAt ? `, updated ${shortDate(installed.updatedAt)}` : ""}.
-								{installed.instances === "single" ? "Everyone gets one, opened straight from Home." : `You have ${plural(installed.mine, "item")}; ${plural(installed.grains, "item")} in total, including the trash.`}
+								{installed.instances === "single" ? "Everyone gets one, opened straight from Home." : `You have ${plural(installed.mine, "item")}; ${plural(installed.crumbs, "item")} in total, including the trash.`}
 							</p>
 						</div>
 					{/if}

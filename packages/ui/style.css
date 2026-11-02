@@ -294,27 +294,27 @@ kbd { font: 600 0.7rem/1 var(--font); padding: 3px 6px; border-radius: 5px; bord
 .row .grow .chip { margin: 0 0 0 6px; }
 
 
-/* --- full-screen app view (a grain in Hamstr, a demo in the store): the app
+/* --- full-screen app view (a crumb in Hamstr, a demo in the store): the app
    fills the screen under a slim title bar --- */
-body.grain-mode { overflow: hidden; }
-.grain-view { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr; background: var(--bg); }
-.grain-bar {
+body.crumb-mode { overflow: hidden; }
+.crumb-view { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr; background: var(--bg); }
+.crumb-bar {
 	display: flex; align-items: center; gap: 8px; padding: 6px 10px; min-height: 50px;
 	border-bottom: 1px solid var(--line); background: var(--glass);
 	backdrop-filter: saturate(1.8) blur(20px); -webkit-backdrop-filter: saturate(1.8) blur(20px);
 }
-.grain-bar .tile-icon { width: 28px; height: 28px; font-size: 0.95rem; border-radius: 8px; flex: none; box-shadow: none; }
-.grain-title { font-weight: 600; font-size: 0.95rem; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 4px 8px; min-width: 0; width: min(420px, 40vw); text-overflow: ellipsis; }
-.grain-title:not([readonly]):hover { background: var(--surface-2); }
-.grain-title:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
-.grain-bar .spacer { flex: 1; }
+.crumb-bar .tile-icon { width: 28px; height: 28px; font-size: 0.95rem; border-radius: 8px; flex: none; box-shadow: none; }
+.crumb-title { font-weight: 600; font-size: 0.95rem; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 4px 8px; min-width: 0; width: min(420px, 40vw); text-overflow: ellipsis; }
+.crumb-title:not([readonly]):hover { background: var(--surface-2); }
+.crumb-title:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+.crumb-bar .spacer { flex: 1; }
 .crumb-app { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px 3px 4px; border-radius: 8px; color: var(--dim); text-decoration: none; font-size: 0.88rem; font-weight: 540; white-space: nowrap; }
 .crumb-app:hover { background: var(--surface-2); color: var(--ink); }
 .crumb-sep { display: inline-grid; color: var(--dim); opacity: 0.6; margin: 0 -4px; }
 .crumb-sep svg { width: 14px; height: 14px; }
-.grain-warn { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; margin: 0; box-shadow: var(--shadow); display: grid; gap: 4px; background: var(--surface); }
-.grain-frame { width: 100%; height: 100%; border: 0; background: var(--surface); }
-.grain-loading { display: grid; place-items: center; color: var(--dim); }
+.crumb-warn { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; margin: 0; box-shadow: var(--shadow); display: grid; gap: 4px; background: var(--surface); }
+.crumb-frame { width: 100%; height: 100%; border: 0; background: var(--surface); }
+.crumb-loading { display: grid; place-items: center; color: var(--dim); }
 
 /* --- dialogs --- */
 .scrim {

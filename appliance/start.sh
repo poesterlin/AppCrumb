@@ -29,7 +29,7 @@ set -a; . /data/secrets.env; set +a
 
 export ADMIN_HOST="${ADMIN_HOST:-admin.internal}"
 TLS_MODE="${TLS_MODE:-off}"
-# Home mode: no sign-in, plain HTTP, a port per grain. Hostnames are only used
+# Home mode: no sign-in, plain HTTP, a port per crumb. Hostnames are only used
 # inside the container then; the browser reaches the shell on any name.
 HAMSTR_AUTH="${HAMSTR_AUTH:-required}"
 case "$HAMSTR_AUTH" in
@@ -39,8 +39,8 @@ none)
 		log "home mode is plain HTTP: ignoring TLS_MODE=$TLS_MODE (set HAMSTR_AUTH=required for sign-in and HTTPS)"
 		TLS_MODE=off
 	fi
-	export HAMSTR_AUTH HAMSTR_HOST="${HAMSTR_HOST:-hamstr.internal}" HAMSTR_GRAIN_DOMAIN="${HAMSTR_GRAIN_DOMAIN:-grains.internal}"
-	export HAMSTR_SCHEME=http HAMSTR_PUBLIC_PORT="$HTTP_PORT" HAMSTR_GRAIN_PORTS="${HAMSTR_GRAIN_PORTS:-20000-20999}"
+	export HAMSTR_AUTH HAMSTR_HOST="${HAMSTR_HOST:-hamstr.internal}" HAMSTR_CRUMB_DOMAIN="${HAMSTR_CRUMB_DOMAIN:-crumbs.internal}"
+	export HAMSTR_SCHEME=http HAMSTR_PUBLIC_PORT="$HTTP_PORT" HAMSTR_CRUMB_PORTS="${HAMSTR_CRUMB_PORTS:-20000-20999}"
 	log "home mode: no sign-in. Anyone who can reach port $HTTP_PORT is the owner."
 	;;
 *) log "HAMSTR_AUTH must be required or none"; exit 1 ;;
@@ -104,13 +104,13 @@ if [ "$TLS_MODE" != off ]; then
 	export TLS_HOSTNAME
 	TLS_HOSTNAME=$(cat /data/tls/hostname)
 	log "TLS for $TLS_HOSTNAME and *.$TLS_HOSTNAME"
-	# By default the install's name is the shell, and grains live below it.
+	# By default the install's name is the shell, and crumbs live below it.
 	export HAMSTR_HOST="${HAMSTR_HOST:-$TLS_HOSTNAME}"
-	export HAMSTR_GRAIN_DOMAIN="${HAMSTR_GRAIN_DOMAIN:-$TLS_HOSTNAME}"
+	export HAMSTR_CRUMB_DOMAIN="${HAMSTR_CRUMB_DOMAIN:-$TLS_HOSTNAME}"
 fi
 
 : "${HAMSTR_HOST:?Set HAMSTR_HOST (the Hamstr hostname)}"
-: "${HAMSTR_GRAIN_DOMAIN:?Set HAMSTR_GRAIN_DOMAIN (grains are grain-<id>.<this>)}"
+: "${HAMSTR_CRUMB_DOMAIN:?Set HAMSTR_CRUMB_DOMAIN (crumbs are crumb-<id>.<this>)}"
 export HAMSTR_SCHEME="${HAMSTR_SCHEME:-https}"
 # No store unless one is set: Hamstr's own default is the compose stack's.
 export HAMSTR_STORE="${HAMSTR_STORE:-}"
@@ -144,8 +144,8 @@ pid_hamstr=$!; pids+=("$pid_hamstr")
 
 node /app/panel.mjs /tmp/panel
 # What the Caddyfiles read, also for cert-changed.sh's reload.
-printf 'export ADMIN_HOST=%q HAMSTR_HOST=%q HAMSTR_GRAIN_DOMAIN=%q TLS_HOSTNAME=%q\n' \
-	"$ADMIN_HOST" "$HAMSTR_HOST" "$HAMSTR_GRAIN_DOMAIN" "${TLS_HOSTNAME:-}" > /tmp/caddy.env
+printf 'export ADMIN_HOST=%q HAMSTR_HOST=%q HAMSTR_CRUMB_DOMAIN=%q TLS_HOSTNAME=%q\n' \
+	"$ADMIN_HOST" "$HAMSTR_HOST" "$HAMSTR_CRUMB_DOMAIN" "${TLS_HOSTNAME:-}" > /tmp/caddy.env
 if [ "$HAMSTR_AUTH" = none ]; then
 	caddy run --config /app/caddy/home.caddy --adapter caddyfile &
 elif [ "$TLS_MODE" = off ]; then

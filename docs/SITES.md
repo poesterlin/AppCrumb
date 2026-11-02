@@ -56,7 +56,7 @@ The site needs `esbuild` in its devDependencies.
 3. Behind Traefik, the router rewrites the request URL to `https://` (from
    `X-Forwarded-Proto`), so origin checks see the browser's origin.
 
-Inside a [Hamstr](../hamstr/README.md) grain, requests also carry the visitor's
+Inside a [Hamstr](../hamstr/README.md) crumb, requests also carry the visitor's
 identity and permissions (`X-Hamstr-User-Id`, `-Username`, `-Permissions`,
 `-Role`); see the Hamstr README for the header contract. Outside Hamstr those
 headers are not set and must not be trusted.

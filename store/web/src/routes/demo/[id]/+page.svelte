@@ -1,6 +1,6 @@
 <script>
 	// A temporary copy of an app on the store's demo node, full screen under a
-	// slim bar, like a grain in Hamstr. On phones it opens in its own tab.
+	// slim bar, like a crumb in Hamstr. On phones it opens in its own tab.
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { ICON } from "@hamstr/ui/icons.ts";
@@ -59,8 +59,8 @@
 {:else if !demo}
 	<div class="welcome"><p class="dim"><span class="spinner"></span> Opening the demo…</p></div>
 {:else}
-	<div class="grain-view">
-		<header class="grain-bar">
+	<div class="crumb-view">
+		<header class="crumb-bar">
 			<a class="icon-button" href={back} aria-label="Back to the app">{@html ICON.back}</a>
 			{#if app}<AppIcon {app} />{/if}
 			<strong class="demo-title">Try {app?.name ?? "this app"}</strong>
@@ -73,7 +73,7 @@
 			{/if}
 		</header>
 		{#if narrow}
-			<div class="grain-loading">
+			<div class="crumb-loading">
 				<div class="welcome-card">
 					<h1>Try {app?.name ?? "it"} full screen</h1>
 					<p class="dim">On a phone, the demo opens in its own tab, so forms, the keyboard and scrolling work like the real thing.</p>
@@ -82,7 +82,7 @@
 			</div>
 		{:else}
 			<iframe
-				class="grain-frame"
+				class="crumb-frame"
 				src={demo.url}
 				title="{app?.name ?? 'App'} demo"
 				sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"

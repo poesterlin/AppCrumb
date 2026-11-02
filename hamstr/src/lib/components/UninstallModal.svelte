@@ -45,7 +45,7 @@
 			busy = false;
 			uninstallState.app = null;
 			const here = page.url.pathname;
-			if (here === `/a/${slug}` || (here.startsWith("/g/") && page.data.grain?.app?.slug === slug)) await goto("/");
+			if (here === `/a/${slug}` || (here.startsWith("/c/") && page.data.crumb?.app?.slug === slug)) await goto("/");
 			else await invalidateAll();
 		} catch (err) {
 			busy = false;

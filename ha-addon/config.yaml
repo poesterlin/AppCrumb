@@ -14,7 +14,7 @@ boot: auto
 init: true
 # celld drains for about 15 s when it stops.
 timeout: 60
-# Home mode opens a port per grain (20000 and up) as grains are made, so the
+# Home mode opens a port per crumb (20000 and up) as crumbs are made, so the
 # add-on shares the host's network instead of mapping fixed ports.
 host_network: true
 ports:
@@ -41,7 +41,7 @@ schema:
   address: str?
   acme_email: email?
   hamstr_host: str?
-  grain_domain: str?
+  crumb_domain: str?
   oidc_name: str?
   oidc_issuer: url?
   oidc_client_id: str?

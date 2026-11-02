@@ -46,7 +46,7 @@ jobs:
             image: celld-sites-dashboard
             platforms: linux/amd64
           # Store and moderation share one image (moderation overrides the
-          # command); Hamstr is the shell and grain proxy.
+          # command); Hamstr is the shell and crumb proxy.
           - name: store
             context: .
             dockerfile: store/Dockerfile

@@ -17,7 +17,7 @@
 	{#if inHamstr}
 		<p>
 			Not available here. <code>/.celld/auth/me</code> belongs to the celld router's sign-in, which does not sit in
-			front of a Hamstr grain. Inside Hamstr, the server passes what the page needs.
+			front of a Hamstr crumb. Inside Hamstr, the server passes what the page needs.
 		</p>
 	{:else}
 		<p>

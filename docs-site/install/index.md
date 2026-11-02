@@ -54,7 +54,7 @@ files next to the repository: the build context is the repository root.
 | Architecture | amd64 or arm64 |
 | Docker | a current release, with the Compose plugin |
 | RAM | ~1 GB for a small install; each loaded app isolate stays resident (~120 MB for a large Astro site) |
-| Disk | a few hundred MB plus whatever your grains hold |
+| Disk | a few hundred MB plus whatever your crumbs hold |
 | Network | a hostname that reaches the box; HTTPS needs a domain and a DNS provider API token |
 | Time | the container needs a correct clock for TLS and OIDC |
 

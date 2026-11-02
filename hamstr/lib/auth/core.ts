@@ -27,7 +27,7 @@ export interface Config {
 	/** HMAC key shared with the celld router (AUTH_KEY). Without it, celld sites
 	 *  cannot hand visitors here; Hamstr's own sign-in still works. */
 	key?: string;
-	/** Sites to leave off the Sites page (Hamstr's own grains). */
+	/** Sites to leave off the Sites page (Hamstr's own crumbs). */
 	hideSite?: (site: string) => boolean;
 	dbPath: string;
 	/** The celld admin API (Hamstr's client), to list sites and push mode overrides.
@@ -114,7 +114,7 @@ export function createCore(config: Config, deps: Deps = {}) {
 	};
 
 	/** Bring over someone who signed in before accounts lived here, keeping their
-	 *  id (Hamstr's grains point at it) and their identity at `pid`. Idempotent. */
+	 *  id (Hamstr's crumbs point at it) and their identity at `pid`. Idempotent. */
 	function importPerson(p: { id: string; name: string; email?: string | null; pid: string; subject: string; label?: string | null; role: string }) {
 		if (userById(p.id) || one("SELECT 1 FROM identities WHERE provider_id = ? AND subject = ?", p.pid, p.subject)) return false;
 		tx(() => {

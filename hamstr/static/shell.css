@@ -2,7 +2,7 @@
    design system (packages/ui/style.css, served as /ui.css): home-screen
    tiles and their menus. */
 
-/* --- grains: home-screen icons with a label underneath --- */
+/* --- crumbs: home-screen icons with a label underneath --- */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 10px 6px; }
 .tile {
 	position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -45,7 +45,7 @@
 	.tiles { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px 2px; }
 	.tile .tile-icon, .tile.new .plus { width: 62px; height: 62px; border-radius: 17px; font-size: 1.8rem; }
 	.tile-badge { left: calc(50% + 18px); }
-	.grain-title { width: 40vw; }
+	.crumb-title { width: 40vw; }
 }
 
 /* --- an admin's nudge under the top bar: people waiting to be let in --- */

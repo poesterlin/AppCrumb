@@ -1,6 +1,6 @@
-// The celld admin API, as Hamstr uses it. One grain is one celld site, so its
-// Durable Objects (its data) and its egress grant belong to that grain alone.
-// Installing an app uploads its code once; a new grain only stages and
+// The celld admin API, as Hamstr uses it. One crumb is one celld site, so its
+// Durable Objects (its data) and its egress grant belong to that crumb alone.
+// Installing an app uploads its code once; a new crumb only stages and
 // activates a version the node already has, which takes milliseconds.
 import { createHash, randomBytes } from "node:crypto";
 import { closeSync, createReadStream, createWriteStream, mkdtempSync, openSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -117,8 +117,8 @@ export function createCelld({ api, adminHost, adminToken, tmpDir, timeoutMs = 12
 		}
 	}
 
-	/** Point a grain's site at `version` (new grain or app update). */
-	async function deployGrain(host: string, version: string, egress: string[] = []): Promise<void> {
+	/** Point a crumb's site at `version` (new crumb or app update). */
+	async function deployCrumb(host: string, version: string, egress: string[] = []): Promise<void> {
 		await ok("POST", `/stage?${q({ host, version })}`);
 		await setEgress(host, egress);
 		await ok("POST", `/activate?${q({ host, version })}`);
@@ -185,7 +185,7 @@ export function createCelld({ api, adminHost, adminToken, tmpDir, timeoutMs = 12
 		});
 	}
 
-	return { call, upload, deployGrain, deleteSite, setEgress, dumpTo, restoreFrom };
+	return { call, upload, deployCrumb, deleteSite, setEgress, dumpTo, restoreFrom };
 }
 
 /** The last JSON line of a file, or null. */

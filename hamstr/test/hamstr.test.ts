@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { createStore } from "../../store/server.ts";
 import { bundle, call, manifest } from "../../store/test/helpers.ts";
-import { grainPolicy } from "../lib/proxy.ts";
+import { crumbPolicy } from "../lib/proxy.ts";
 import { createHamstr, siteOf } from "../server.ts";
 import { Browser, mockCelld, mockIdp } from "./helpers.ts";
 
@@ -57,9 +57,9 @@ async function signIn(user, next = "/", onPort = port) {
 }
 const apiCall = (browser: any, method: string, path: string, json?: unknown) => browser.request(method, path, { host: SHELL, headers: ORIGIN, ...(json !== undefined && { json }) });
 
-/** Open a grain the way the shell does: ticket, then the grain's enter URL. */
-async function enter(browser, grainId, path = "/") {
-	const r = await apiCall(browser, "POST", `/api/grains/${grainId}/open`, { path });
+/** Open a crumb the way the shell does: ticket, then the crumb's enter URL. */
+async function enter(browser, crumbId, path = "/") {
+	const r = await apiCall(browser, "POST", `/api/crumbs/${crumbId}/open`, { path });
 	assert.equal(r.status, 200, r.text);
 	return follow(browser, r.json.url);
 }
@@ -67,7 +67,7 @@ async function follow(browser, absolute) {
 	const url = new URL(absolute);
 	return browser.request("GET", url.pathname + url.search, { host: url.hostname });
 }
-const grainHost = (id) => `grain-${id}.grains.test`;
+const crumbHost = (id) => `crumb-${id}.crumbs.test`;
 const sameOrigin = { "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" };
 
 before(async () => {
@@ -84,7 +84,7 @@ before(async () => {
 	hamstr = createHamstr({
 		dataDir: join(dir, "hamstr"),
 		shellHost: SHELL,
-		grainDomain: "grains.test",
+		crumbDomain: "crumbs.test",
 		scheme: "http",
 		store: storeBase,
 		celldApi: celld.api,
@@ -110,10 +110,10 @@ after(async () => {
 });
 
 describe("cookie mode", () => {
-	it("treats shell and grains on one registrable domain as same-site", () => {
-		assert.equal(siteOf("hamstr.example.com"), siteOf("grain-abc.example.com"));
-		assert.notEqual(siteOf("hamstr.localhost"), siteOf("grain-abc.localhost"));
-		assert.notEqual(siteOf("hamstr.test"), siteOf("grain-abc.grains.test"));
+	it("treats shell and crumbs on one registrable domain as same-site", () => {
+		assert.equal(siteOf("hamstr.example.com"), siteOf("crumb-abc.example.com"));
+		assert.notEqual(siteOf("hamstr.localhost"), siteOf("crumb-abc.localhost"));
+		assert.notEqual(siteOf("hamstr.test"), siteOf("crumb-abc.crumbs.test"));
 		assert.equal(siteOf("localhost"), "localhost");
 	});
 });
@@ -134,7 +134,7 @@ describe("hosts and robustness", () => {
 		const ui = await b.request("GET", "/ui.css", { host: SHELL });
 		assert.equal(ui.status, 200);
 		assert.match(ui.headers["content-type"], /text\/css/);
-		assert.match(ui.text, /\.grain-frame/);
+		assert.match(ui.text, /\.crumb-frame/);
 		const css = await b.request("GET", "/shell.css", { host: SHELL });
 		assert.equal(css.status, 200);
 		assert.match(css.text, /\.tiles/);
@@ -150,7 +150,7 @@ describe("hosts and robustness", () => {
 		const page = await b.request("GET", "/", { host: SHELL });
 		assert.equal(page.status, 200);
 		assert.match(page.headers["content-security-policy"], /frame-ancestors 'none'/);
-		assert.match(page.headers["content-security-policy"], /frame-src http:\/\/\*\.grains\.test/);
+		assert.match(page.headers["content-security-policy"], /frame-src http:\/\/\*\.crumbs\.test/);
 		assert.match(page.headers["content-security-policy"], /form-action 'self'(;|$)/);
 		assert.equal((await b.request("GET", "/api/me", { host: SHELL })).status, 401);
 	});
@@ -214,7 +214,7 @@ describe("sign-in", () => {
 		const upgraded = createHamstr({
 			dataDir: oldDir,
 			shellHost: SHELL,
-			grainDomain: "grains.test",
+			crumbDomain: "crumbs.test",
 			scheme: "http",
 			store: storeBase,
 			celldApi: celld.api,
@@ -254,8 +254,8 @@ describe("sign-in", () => {
 
 let ada;
 let bob;
-let board; // a grain
-describe("apps and grains", () => {
+let board; // a crumb
+describe("apps and crumbs", () => {
 	before(async () => {
 		ada = await signIn(ADA);
 		bob = await signIn(BOB);
@@ -269,7 +269,7 @@ describe("apps and grains", () => {
 		assert.deepEqual(seq.slice(0, 2), ["POST /blobs/missing", "PUT /blob"]);
 		assert.ok(seq.includes("PUT /code"));
 		const probe = celld.calls.find((c) => c.path === "/check").query.host;
-		assert.match(probe, /^grain-probe-[a-z0-9]{8}\.grains\.test$/);
+		assert.match(probe, /^crumb-probe-[a-z0-9]{8}\.crumbs\.test$/);
 		assert.ok(celld.calls.some((c) => c.method === "DELETE" && c.path === "/site" && c.query.id === probe), "probe removed");
 		assert.equal(celld.sites.has(probe), false);
 		assert.equal((await apiCall(ada, "POST", "/api/apps", { id: "pub/plain" })).status, 200);
@@ -307,126 +307,126 @@ describe("apps and grains", () => {
 		const apps = (await ada.request("GET", "/api/apps", { host: SHELL })).json.apps;
 		assert.equal(apps.find((a) => a.slug === "plain").storeId, "pub/plain");
 	});
-	it("holds a grain's browser code to the app's declared hosts", () => {
-		const none = grainPolicy([], "https://shell.test");
+	it("holds a crumb's browser code to the app's declared hosts", () => {
+		const none = crumbPolicy([], "https://shell.test");
 		assert.match(none, /connect-src 'self';/);
 		assert.match(none, /img-src 'self' data: blob:;/);
-		const some = grainPolicy(["api.example.com"], "https://shell.test");
+		const some = crumbPolicy(["api.example.com"], "https://shell.test");
 		assert.match(some, /connect-src 'self' https:\/\/api\.example\.com https:\/\/\*\.api\.example\.com wss:\/\/api\.example\.com;/);
 		assert.match(some, /font-src 'self' data:;/, "fonts never come from elsewhere");
 		assert.match(some, /frame-ancestors https:\/\/shell\.test$/);
 	});
-	it("creates a grain as its own celld site, with the app's egress", async () => {
+	it("creates a crumb as its own celld site, with the app's egress", async () => {
 		celld.calls.length = 0;
-		const r = await apiCall(bob, "POST", "/api/grains", { slug: "board", title: "Family board" });
+		const r = await apiCall(bob, "POST", "/api/crumbs", { slug: "board", title: "Family board" });
 		assert.equal(r.status, 201, r.text);
-		board = r.json.grain;
+		board = r.json.crumb;
 		assert.match(board.id, /^[a-z0-9]{12}$/);
 		assert.equal(board.role, "owner");
 		assert.deepEqual(board.permissions, ["pin", "moderate"]);
 		assert.deepEqual(
 			celld.calls.map((c) => `${c.method} ${c.path} ${c.query.host}`),
-			[`POST /stage ${grainHost(board.id)}`, `DELETE /egress ${grainHost(board.id)}`, `POST /activate ${grainHost(board.id)}`],
+			[`POST /stage ${crumbHost(board.id)}`, `DELETE /egress ${crumbHost(board.id)}`, `POST /activate ${crumbHost(board.id)}`],
 		);
-		const f = await apiCall(bob, "POST", "/api/grains", { slug: "fetcher", title: "Feeds" });
+		const f = await apiCall(bob, "POST", "/api/crumbs", { slug: "fetcher", title: "Feeds" });
 		assert.ok(celld.calls.some((c) => c.method === "PUT" && c.path === "/egress" && c.body === '["api.example.com"]'));
-		const listed = (await bob.request("GET", "/api/grains", { host: SHELL })).json;
+		const listed = (await bob.request("GET", "/api/crumbs", { host: SHELL })).json;
 		assert.deepEqual(listed.mine.map((g) => g.title).sort(), ["Family board", "Feeds"]);
-		assert.equal((await ada.request("GET", "/api/grains", { host: SHELL })).json.mine.length, 0);
-		assert.equal((await ada.request("GET", `/api/grains/${f.json.grain.id}`, { host: SHELL })).status, 404);
+		assert.equal((await ada.request("GET", "/api/crumbs", { host: SHELL })).json.mine.length, 0);
+		assert.equal((await ada.request("GET", `/api/crumbs/${f.json.crumb.id}`, { host: SHELL })).status, 404);
 	});
 	it("refuses cross-origin writes to the shell API", async () => {
-		const evil = await bob.request("POST", "/api/grains", { host: SHELL, headers: { origin: "http://grain-x.grains.test" }, json: { slug: "board" } });
+		const evil = await bob.request("POST", "/api/crumbs", { host: SHELL, headers: { origin: "http://crumb-x.crumbs.test" }, json: { slug: "board" } });
 		assert.equal(evil.status, 403);
-		const fetchSite = await bob.request("POST", "/api/grains", { host: SHELL, headers: { "sec-fetch-site": "same-site" }, json: { slug: "board" } });
+		const fetchSite = await bob.request("POST", "/api/crumbs", { host: SHELL, headers: { "sec-fetch-site": "same-site" }, json: { slug: "board" } });
 		assert.equal(fetchSite.status, 403);
-		const form = await bob.request("POST", "/api/grains", { host: SHELL, headers: { ...ORIGIN, "content-type": "text/plain" }, body: "{}" });
+		const form = await bob.request("POST", "/api/crumbs", { host: SHELL, headers: { ...ORIGIN, "content-type": "text/plain" }, body: "{}" });
 		assert.equal(form.status, 415);
 	});
-	it("opens a single-instance app's one grain, making it on first open", async () => {
+	it("opens a single-instance app's one crumb, making it on first open", async () => {
 		await publish({ slug: "family", name: "Family", instances: "single" }, "eeeeeeeeeeee");
 		assert.equal((await apiCall(ada, "POST", "/api/apps", { id: "pub/family" })).status, 200);
 		const apps = (await bob.request("GET", "/api/apps", { host: SHELL })).json.apps;
 		assert.equal(apps.find((a) => a.slug === "family").instances, "single");
 		assert.equal(apps.find((a) => a.slug === "board").instances, "many");
-		// Two taps at once still make one grain.
+		// Two taps at once still make one crumb.
 		const [a, b] = await Promise.all([apiCall(bob, "POST", "/api/apps/family/open", {}), apiCall(bob, "POST", "/api/apps/family/open", {})]);
 		assert.equal(a.status, 201, a.text);
-		assert.equal(b.json.grain.id, a.json.grain.id);
-		assert.equal(a.json.grain.title, "Family");
+		assert.equal(b.json.crumb.id, a.json.crumb.id);
+		assert.equal(a.json.crumb.title, "Family");
 		const again = await apiCall(bob, "POST", "/api/apps/family/open", {});
 		assert.equal(again.status, 200);
-		assert.equal(again.json.grain.id, a.json.grain.id);
+		assert.equal(again.json.crumb.id, a.json.crumb.id);
 		// Everyone gets their own; the trash does not count.
-		const ada1 = (await apiCall(ada, "POST", "/api/apps/family/open", {})).json.grain;
-		assert.notEqual(ada1.id, a.json.grain.id);
-		await apiCall(ada, "POST", `/api/grains/${ada1.id}/trash`, {});
+		const ada1 = (await apiCall(ada, "POST", "/api/apps/family/open", {})).json.crumb;
+		assert.notEqual(ada1.id, a.json.crumb.id);
+		await apiCall(ada, "POST", `/api/crumbs/${ada1.id}/trash`, {});
 		const ada2 = await apiCall(ada, "POST", "/api/apps/family/open", {});
 		assert.equal(ada2.status, 201);
-		assert.notEqual(ada2.json.grain.id, ada1.id);
+		assert.notEqual(ada2.json.crumb.id, ada1.id);
 		// Many-instance apps are opened from their own page instead.
 		assert.equal((await apiCall(bob, "POST", "/api/apps/board/open", {})).status, 409);
 		assert.equal((await apiCall(bob, "POST", "/api/apps/nope/open", {})).status, 404);
 		assert.equal((await bob.request("POST", "/api/apps/family/open", { host: SHELL, headers: { origin: "http://evil.test" }, json: {} })).status, 403);
-		for (const g of [ada1, ada2.json.grain]) {
-			await apiCall(ada, "POST", `/api/grains/${g.id}/trash`, {});
-			assert.equal((await apiCall(ada, "DELETE", `/api/grains/${g.id}`)).status, 200);
+		for (const g of [ada1, ada2.json.crumb]) {
+			await apiCall(ada, "POST", `/api/crumbs/${g.id}/trash`, {});
+			assert.equal((await apiCall(ada, "DELETE", `/api/crumbs/${g.id}`)).status, 200);
 		}
 	});
-	it("names a new grain after its app and shows it on the app's page", async () => {
-		const r = await apiCall(bob, "POST", "/api/grains", { slug: "plain" });
-		assert.equal(r.json.grain.title, "Untitled Plain");
+	it("names a new crumb after its app and shows it on the app's page", async () => {
+		const r = await apiCall(bob, "POST", "/api/crumbs", { slug: "plain" });
+		assert.equal(r.json.crumb.title, "Untitled Plain");
 		const home = await bob.request("GET", "/", { host: SHELL });
 		assert.match(home.text, /href="\/a\/plain"/);
 		assert.match(home.text, /href="\/a\/family"/);
 		const appPage = await bob.request("GET", "/a/plain", { host: SHELL });
 		assert.equal(appPage.status, 200);
-		assert.ok(appPage.text.includes(`/g/${r.json.grain.id}`));
+		assert.ok(appPage.text.includes(`/c/${r.json.crumb.id}`));
 		assert.equal((await bob.request("GET", "/apps", { host: SHELL })).headers.location, "/store");
-		await apiCall(bob, "POST", `/api/grains/${r.json.grain.id}/trash`, {});
-		assert.equal((await apiCall(bob, "DELETE", `/api/grains/${r.json.grain.id}`)).status, 200);
+		await apiCall(bob, "POST", `/api/crumbs/${r.json.crumb.id}/trash`, {});
+		assert.equal((await apiCall(bob, "DELETE", `/api/crumbs/${r.json.crumb.id}`)).status, 200);
 	});
-	it("downloads a grain's data from the app's export path, as the owner only", async () => {
+	it("downloads a crumb's data from the app's export path, as the owner only", async () => {
 		await publish({ slug: "notes", name: "Notes", export: "/export?all=1" }, "ffffffffffff");
 		assert.equal((await apiCall(ada, "POST", "/api/apps", { id: "pub/notes" })).status, 200);
 		const apps = (await bob.request("GET", "/api/apps", { host: SHELL })).json.apps;
 		assert.equal(apps.find((a) => a.slug === "notes").canExport, true);
 		assert.equal(apps.find((a) => a.slug === "plain").canExport, false);
-		const g = (await apiCall(bob, "POST", "/api/grains", { slug: "notes", title: "Trip: plans/ideas" })).json.grain;
-		const r = await bob.request("GET", `/api/grains/${g.id}/export`, { host: SHELL, headers: sameOrigin });
+		const g = (await apiCall(bob, "POST", "/api/crumbs", { slug: "notes", title: "Trip: plans/ideas" })).json.crumb;
+		const r = await bob.request("GET", `/api/crumbs/${g.id}/export`, { host: SHELL, headers: sameOrigin });
 		assert.equal(r.status, 200, r.text);
 		assert.match(r.headers["content-disposition"], /^attachment; filename="Trip- plans-ideas \d{4}-\d{2}-\d{2}\.json"; filename\*=UTF-8''/);
 		assert.equal(r.headers["x-content-type-options"], "nosniff");
 		// What the app saw: its own path, the owner's identity, and the proxy token.
-		assert.equal(r.json.host, grainHost(g.id));
+		assert.equal(r.json.host, crumbHost(g.id));
 		assert.equal(r.json.path, "/export?all=1");
 		assert.equal(r.json.headers["x-hamstr-role"], "owner");
 		assert.equal(r.json.headers["x-hamstr-export"], "1");
 		assert.match(r.json.headers["x-hamstr-user-id"], /^[a-f0-9]{32}$/);
 		assert.equal(r.headers["x-celld-proxy-token"], undefined);
 		// Nobody else, not from another site, and not from an app without export.
-		assert.equal((await ada.request("GET", `/api/grains/${g.id}/export`, { host: SHELL })).status, 404);
-		assert.equal((await bob.request("GET", `/api/grains/${g.id}/export`, { host: SHELL, headers: { "sec-fetch-site": "cross-site" } })).status, 403);
-		const p = (await apiCall(bob, "POST", "/api/grains", { slug: "plain" })).json.grain;
-		const none = await bob.request("GET", `/api/grains/${p.id}/export`, { host: SHELL });
+		assert.equal((await ada.request("GET", `/api/crumbs/${g.id}/export`, { host: SHELL })).status, 404);
+		assert.equal((await bob.request("GET", `/api/crumbs/${g.id}/export`, { host: SHELL, headers: { "sec-fetch-site": "cross-site" } })).status, 403);
+		const p = (await apiCall(bob, "POST", "/api/crumbs", { slug: "plain" })).json.crumb;
+		const none = await bob.request("GET", `/api/crumbs/${p.id}/export`, { host: SHELL });
 		assert.equal(none.status, 404);
 		assert.match(none.json.error, /can't export/);
-		await apiCall(bob, "POST", `/api/grains/${g.id}/trash`, {});
-		assert.equal((await bob.request("GET", `/api/grains/${g.id}/export`, { host: SHELL })).status, 404);
+		await apiCall(bob, "POST", `/api/crumbs/${g.id}/trash`, {});
+		assert.equal((await bob.request("GET", `/api/crumbs/${g.id}/export`, { host: SHELL })).status, 404);
 		for (const id of [g.id, p.id]) {
-			await apiCall(bob, "POST", `/api/grains/${id}/trash`, {});
-			assert.equal((await apiCall(bob, "DELETE", `/api/grains/${id}`)).status, 200);
+			await apiCall(bob, "POST", `/api/crumbs/${id}/trash`, {});
+			assert.equal((await apiCall(bob, "DELETE", `/api/crumbs/${id}`)).status, 200);
 		}
 	});
 	it("shows an app's items and trash on its page", async () => {
-		const g = (await apiCall(bob, "POST", "/api/grains", { slug: "plain", title: "Old list" })).json.grain;
-		await apiCall(bob, "POST", `/api/grains/${g.id}/trash`, {});
+		const g = (await apiCall(bob, "POST", "/api/crumbs", { slug: "plain", title: "Old list" })).json.crumb;
+		await apiCall(bob, "POST", `/api/crumbs/${g.id}/trash`, {});
 		const html = (await bob.request("GET", "/a/plain?tab=trash", { host: SHELL })).text;
 		assert.match(html, /Old list/);
 		assert.match(html, /Trash <span class="count">1<\/span>/);
 		assert.equal((await bob.request("GET", "/a/nope", { host: SHELL })).status, 200);
 		assert.match((await bob.request("GET", "/a/nope", { host: SHELL })).text, /not installed/);
-		assert.equal((await apiCall(bob, "DELETE", `/api/grains/${g.id}`)).status, 200);
+		assert.equal((await apiCall(bob, "DELETE", `/api/crumbs/${g.id}`)).status, 200);
 	});
 	it("shows an app's store details, versions and what it can do", async () => {
 		const page = await bob.request("GET", "/store/board", { host: SHELL });
@@ -442,22 +442,22 @@ describe("apps and grains", () => {
 		assert.match((await bob.request("GET", "/store?q=fetch", { host: SHELL })).text, /Fetcher/);
 		assert.doesNotMatch((await bob.request("GET", "/store?q=fetch", { host: SHELL })).text, /data-slug="plain"/);
 	});
-	it("refuses to remove an app that still has grains", async () => {
+	it("refuses to remove an app that still has crumbs", async () => {
 		const r = await apiCall(ada, "DELETE", "/api/apps/board");
 		assert.equal(r.status, 409);
 	});
 });
 
-describe("the grain proxy", () => {
+describe("the crumb proxy", () => {
 	it("enters with a one-time ticket and forwards trusted identity only", async () => {
 		const entered = await enter(bob, board.id, "/notes?x=1");
 		assert.equal(entered.status, 303);
 		assert.equal(entered.headers.location, "/notes?x=1");
-		// hamstr.test and grains.test are different sites: a partitioned cookie.
-		assert.match(entered.headers["set-cookie"][0], /^hamstr_grain=.*HttpOnly; SameSite=None; Secure; Partitioned/);
+		// hamstr.test and crumbs.test are different sites: a partitioned cookie.
+		assert.match(entered.headers["set-cookie"][0], /^hamstr_crumb=.*HttpOnly; SameSite=None; Secure; Partitioned/);
 		const r = await bob.request("GET", "/notes?x=1", {
-			host: grainHost(board.id),
-			headers: { "x-hamstr-user-id": "forged", "x-hamstr-permissions": "moderate,admin", "x-celld-proxy-token": "guess", cookie: `${bob.cookieHeader(grainHost(board.id))}; app=1` },
+			host: crumbHost(board.id),
+			headers: { "x-hamstr-user-id": "forged", "x-hamstr-permissions": "moderate,admin", "x-celld-proxy-token": "guess", cookie: `${bob.cookieHeader(crumbHost(board.id))}; app=1` },
 		});
 		assert.equal(r.status, 200, r.text);
 		const h = r.json.headers;
@@ -466,135 +466,135 @@ describe("the grain proxy", () => {
 		assert.equal(decodeURIComponent(h["x-hamstr-username"]), "Bob Builder");
 		assert.match(h["x-hamstr-user-id"], /^[a-f0-9]{32}$/);
 		assert.notEqual(h["x-hamstr-user-id"], "forged");
-		assert.equal(h["x-hamstr-grain-id"], board.id);
-		assert.equal(h.cookie, "app=1", "the grain session cookie never reaches the app");
+		assert.equal(h["x-hamstr-crumb-id"], board.id);
+		assert.equal(h.cookie, "app=1", "the crumb session cookie never reaches the app");
 		assert.equal(h["x-forwarded-proto"], "http");
 		// Hamstr's policy: framed by the shell only, and the page's code can reach
-		// nothing beyond the grain itself (this app declares no hosts).
+		// nothing beyond the crumb itself (this app declares no hosts).
 		const policy = r.headers["content-security-policy"];
 		assert.match(policy, new RegExp(`frame-ancestors http://${SHELL.replace(/\./g, "\\.")}$`));
 		assert.match(policy, /connect-src 'self';/);
 		assert.match(policy, /script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;/);
 		assert.match(policy, /font-src 'self' data:;/);
 	});
-	it("passes a grain's 304 through without dying", async () => {
+	it("passes a crumb's 304 through without dying", async () => {
 		await enter(bob, board.id);
-		const host = grainHost(board.id);
+		const host = crumbHost(board.id);
 		const r = await bob.request("GET", "/not-modified", { host, headers: { cookie: bob.cookieHeader(host), "if-none-match": '"v1"' } });
 		assert.equal(r.status, 304);
 		assert.equal(r.headers.etag, '"v1"');
 		const again = await bob.request("GET", "/notes", { host, headers: { cookie: bob.cookieHeader(host) } });
 		assert.equal(again.status, 200, "the server is still up");
 	});
-	it("does not accept a ticket twice, or on another grain", async () => {
-		const r = await apiCall(bob, "POST", `/api/grains/${board.id}/open`, { path: "/" });
+	it("does not accept a ticket twice, or on another crumb", async () => {
+		const r = await apiCall(bob, "POST", `/api/crumbs/${board.id}/open`, { path: "/" });
 		const url = new URL(r.json.url);
 		const thief = new Browser(port);
-		const other = await apiCall(bob, "POST", "/api/grains", { slug: "plain", title: "Other" });
-		assert.equal((await thief.request("GET", url.pathname + url.search, { host: grainHost(other.json.grain.id) })).status, 403);
+		const other = await apiCall(bob, "POST", "/api/crumbs", { slug: "plain", title: "Other" });
+		assert.equal((await thief.request("GET", url.pathname + url.search, { host: crumbHost(other.json.crumb.id) })).status, 403);
 		const once = new Browser(port);
 		assert.equal((await once.request("GET", url.pathname + url.search, { host: url.hostname })).status, 403, "ticket burned by the failed attempt");
 	});
-	it("sends visitors without a grain session back to the shell", async () => {
+	it("sends visitors without a crumb session back to the shell", async () => {
 		const b = new Browser(port);
-		const nav = await b.request("GET", "/deep/link", { host: grainHost(board.id), headers: { "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "sec-fetch-site": "none" } });
+		const nav = await b.request("GET", "/deep/link", { host: crumbHost(board.id), headers: { "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "sec-fetch-site": "none" } });
 		assert.equal(nav.status, 303);
-		assert.equal(nav.headers.location, `http://${SHELL}/g/${board.id}/open?path=${encodeURIComponent("/deep/link")}`);
-		const frame = await b.request("GET", "/", { host: grainHost(board.id), headers: { "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe", "sec-fetch-site": "same-site" } });
+		assert.equal(nav.headers.location, `http://${SHELL}/c/${board.id}/open?path=${encodeURIComponent("/deep/link")}`);
+		const frame = await b.request("GET", "/", { host: crumbHost(board.id), headers: { "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe", "sec-fetch-site": "same-site" } });
 		assert.equal(frame.status, 401);
 		assert.match(frame.text, /target="_top"/);
-		assert.equal((await b.request("GET", "/api/data", { host: grainHost(board.id) })).status, 401);
+		assert.equal((await b.request("GET", "/api/data", { host: crumbHost(board.id) })).status, 401);
 		// The top-level open path issues a ticket for a signed-in owner.
-		const open = await bob.request("GET", `/g/${board.id}/open?path=%2Fdeep%2Flink`, { host: SHELL });
+		const open = await bob.request("GET", `/c/${board.id}/open?path=%2Fdeep%2Flink`, { host: SHELL });
 		assert.equal(open.status, 303);
-		assert.match(open.headers.location, new RegExp(`^http://${grainHost(board.id)}/\\.hamstr/enter\\?ticket=`));
-		const anon = await b.request("GET", `/g/${board.id}/open`, { host: SHELL });
+		assert.match(open.headers.location, new RegExp(`^http://${crumbHost(board.id)}/\\.hamstr/enter\\?ticket=`));
+		const anon = await b.request("GET", `/c/${board.id}/open`, { host: SHELL });
 		assert.match(anon.headers.location, /^\/auth\/login\?next=/);
 	});
-	it("keeps other origins, including other grains, from scripting a grain", async () => {
-		const host = grainHost(board.id);
+	it("keeps other origins, including other crumbs, from scripting a crumb", async () => {
+		const host = crumbHost(board.id);
 		const sub = await bob.request("GET", "/api/data", { host, headers: { "sec-fetch-site": "same-site", "sec-fetch-mode": "no-cors" } });
 		assert.equal(sub.status, 403);
 		const post = await bob.request("POST", "/pin", { host, headers: { "sec-fetch-site": "same-site", "sec-fetch-mode": "navigate" }, body: "text=hi" });
 		assert.equal(post.status, 403);
-		const legacy = await bob.request("POST", "/pin", { host, headers: { origin: "http://grain-other.grains.test" }, body: "text=hi" });
+		const legacy = await bob.request("POST", "/pin", { host, headers: { origin: "http://crumb-other.crumbs.test" }, body: "text=hi" });
 		assert.equal(legacy.status, 403);
 		const own = await bob.request("POST", "/pin", { host, headers: { ...sameOrigin, origin: `http://${host}` }, body: "text=hi" });
 		assert.equal(own.status, 200);
 		assert.equal(own.json.body, "text=hi");
 		const link = await bob.request("GET", "/", { host, headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" } });
-		assert.equal(link.status, 200, "a plain link from elsewhere still opens the grain");
+		assert.equal(link.status, 200, "a plain link from elsewhere still opens the crumb");
 	});
-	it("lets a grain set cookies for itself only", async () => {
-		const r = await bob.request("GET", "/setcookie", { host: grainHost(board.id) });
+	it("lets a crumb set cookies for itself only", async () => {
+		const r = await bob.request("GET", "/setcookie", { host: crumbHost(board.id) });
 		assert.deepEqual(r.headers["set-cookie"], ["app=1; Path=/"]);
 		// The app's own policy stays, next to Hamstr's: the browser enforces both.
 		assert.match(r.headers["content-security-policy"], new RegExp(`^default-src 'self', default-src 'self'; .*frame-ancestors http://${SHELL.replace(/\./g, "\\.")}$`));
 	});
-	it("ends grain sessions when the shell session signs out", async () => {
+	it("ends crumb sessions when the shell session signs out", async () => {
 		const carol = await signIn(BOB);
 		await enter(carol, board.id);
-		assert.equal((await carol.request("GET", "/", { host: grainHost(board.id) })).status, 200);
+		assert.equal((await carol.request("GET", "/", { host: crumbHost(board.id) })).status, 200);
 		await carol.request("POST", "/auth/logout", { host: SHELL, headers: ORIGIN });
-		assert.equal((await carol.request("GET", "/", { host: grainHost(board.id) })).status, 401);
+		assert.equal((await carol.request("GET", "/", { host: crumbHost(board.id) })).status, 401);
 	});
 });
 
 describe("privacy", () => {
 	it("keeps an item to its owner: others cannot list, open, change or download it", async () => {
 		const eve = await signIn(EVE);
-		assert.equal((await eve.request("GET", "/api/grains", { host: SHELL })).json.mine.length, 0);
-		assert.equal((await eve.request("GET", `/api/grains/${board.id}`, { host: SHELL })).status, 404);
-		assert.equal((await apiCall(eve, "POST", `/api/grains/${board.id}/open`, { path: "/" })).status, 404);
-		assert.equal((await apiCall(eve, "PATCH", `/api/grains/${board.id}`, { title: "Mine now" })).status, 404);
-		assert.equal((await apiCall(eve, "POST", `/api/grains/${board.id}/trash`, {})).status, 404);
-		assert.equal((await eve.request("GET", `/api/grains/${board.id}/export`, { host: SHELL })).status, 404);
-		assert.equal((await eve.request("GET", "/", { host: grainHost(board.id) })).status, 401);
-		assert.match((await eve.request("GET", `/g/${board.id}`, { host: SHELL })).text, /Nothing here/);
+		assert.equal((await eve.request("GET", "/api/crumbs", { host: SHELL })).json.mine.length, 0);
+		assert.equal((await eve.request("GET", `/api/crumbs/${board.id}`, { host: SHELL })).status, 404);
+		assert.equal((await apiCall(eve, "POST", `/api/crumbs/${board.id}/open`, { path: "/" })).status, 404);
+		assert.equal((await apiCall(eve, "PATCH", `/api/crumbs/${board.id}`, { title: "Mine now" })).status, 404);
+		assert.equal((await apiCall(eve, "POST", `/api/crumbs/${board.id}/trash`, {})).status, 404);
+		assert.equal((await eve.request("GET", `/api/crumbs/${board.id}/export`, { host: SHELL })).status, 404);
+		assert.equal((await eve.request("GET", "/", { host: crumbHost(board.id) })).status, 401);
+		assert.match((await eve.request("GET", `/c/${board.id}`, { host: SHELL })).text, /Nothing here/);
 	});
 	it("has no share links any more", async () => {
-		assert.equal((await apiCall(bob, "POST", `/api/grains/${board.id}/shares`, { role: "viewer" })).status, 404);
+		assert.equal((await apiCall(bob, "POST", `/api/crumbs/${board.id}/shares`, { role: "viewer" })).status, 404);
 		assert.equal((await new Browser(port).request("GET", `/s/${"a".repeat(32)}`, { host: SHELL })).status, 404);
 		assert.equal((await bob.request("GET", "/shared", { host: SHELL })).status, 404);
-		assert.equal((await bob.request("GET", "/api/grains", { host: SHELL })).json.shared, undefined);
+		assert.equal((await bob.request("GET", "/api/crumbs", { host: SHELL })).json.shared, undefined);
 	});
 });
 
 describe("trash and updates", () => {
-	it("hides a trashed grain, restores it, and deletes it for good", async () => {
-		const g = (await apiCall(bob, "POST", "/api/grains", { slug: "plain", title: "Scratch" })).json.grain;
+	it("hides a trashed crumb, restores it, and deletes it for good", async () => {
+		const g = (await apiCall(bob, "POST", "/api/crumbs", { slug: "plain", title: "Scratch" })).json.crumb;
 		await enter(bob, g.id);
-		assert.equal((await apiCall(bob, "DELETE", `/api/grains/${g.id}`)).status, 409, "trash first");
-		assert.equal((await apiCall(bob, "POST", `/api/grains/${g.id}/trash`, {})).status, 200);
-		assert.equal((await bob.request("GET", "/", { host: grainHost(g.id) })).status, 404);
-		const lists = (await bob.request("GET", "/api/grains", { host: SHELL })).json;
+		assert.equal((await apiCall(bob, "DELETE", `/api/crumbs/${g.id}`)).status, 409, "trash first");
+		assert.equal((await apiCall(bob, "POST", `/api/crumbs/${g.id}/trash`, {})).status, 200);
+		assert.equal((await bob.request("GET", "/", { host: crumbHost(g.id) })).status, 404);
+		const lists = (await bob.request("GET", "/api/crumbs", { host: SHELL })).json;
 		assert.ok(lists.trash.some((t) => t.id === g.id));
 		assert.ok(!lists.mine.some((t) => t.id === g.id));
-		assert.equal((await apiCall(bob, "POST", `/api/grains/${g.id}/restore`, {})).status, 200);
-		await apiCall(bob, "POST", `/api/grains/${g.id}/trash`, {});
-		assert.equal((await apiCall(bob, "DELETE", `/api/grains/${g.id}`)).status, 200);
-		assert.equal(celld.sites.has(grainHost(g.id)), false);
-		assert.equal((await bob.request("GET", `/api/grains/${g.id}`, { host: SHELL })).status, 404);
+		assert.equal((await apiCall(bob, "POST", `/api/crumbs/${g.id}/restore`, {})).status, 200);
+		await apiCall(bob, "POST", `/api/crumbs/${g.id}/trash`, {});
+		assert.equal((await apiCall(bob, "DELETE", `/api/crumbs/${g.id}`)).status, 200);
+		assert.equal(celld.sites.has(crumbHost(g.id)), false);
+		assert.equal((await bob.request("GET", `/api/crumbs/${g.id}`, { host: SHELL })).status, 404);
 	});
-	it("moves every grain to a new release and ignores retired roles", async () => {
+	it("moves every crumb to a new release and ignores retired roles", async () => {
 		await publish({ slug: "board", name: "Board", icon: "📌", version: "1.1.0", ...ROLES }, "dddddddddddd");
 		const updates = await ada.request("GET", "/api/apps/updates", { host: SHELL });
 		assert.equal(updates.json.updates.board.version, "1.1.0");
 		const r = await apiCall(ada, "POST", "/api/apps", { id: "pub/board" });
 		assert.equal(r.status, 200, r.text);
-		assert.equal(r.json.updatedGrains, 1);
-		assert.equal(celld.sites.get(grainHost(board.id)), "dddddddddddd");
-		const g = (await bob.request("GET", `/api/grains/${board.id}`, { host: SHELL })).json.grain;
+		assert.equal(r.json.updatedCrumbs, 1);
+		assert.equal(celld.sites.get(crumbHost(board.id)), "dddddddddddd");
+		const g = (await bob.request("GET", `/api/crumbs/${board.id}`, { host: SHELL })).json.crumb;
 		assert.equal(g.role, "owner");
 	});
-	it("renames grains for their owner", async () => {
-		const r = await apiCall(bob, "PATCH", `/api/grains/${board.id}`, { title: "  Kitchen board  " });
-		assert.equal(r.json.grain.title, "Kitchen board");
-		assert.equal((await apiCall(bob, "PATCH", `/api/grains/${board.id}`, { title: " " })).status, 400);
+	it("renames crumbs for their owner", async () => {
+		const r = await apiCall(bob, "PATCH", `/api/crumbs/${board.id}`, { title: "  Kitchen board  " });
+		assert.equal(r.json.crumb.title, "Kitchen board");
+		assert.equal((await apiCall(bob, "PATCH", `/api/crumbs/${board.id}`, { title: " " })).status, 400);
 	});
 	it("resets an item to empty, keeping the item, and puts the data back if that fails", async () => {
-		const host = grainHost(board.id);
-		const reset = (browser: any, body: any = { confirm: board.id }, headers: Record<string, string> = {}) => browser.request("POST", `/api/grains/${board.id}/reset`, { host: SHELL, headers: { ...ORIGIN, ...headers }, json: body });
+		const host = crumbHost(board.id);
+		const reset = (browser: any, body: any = { confirm: board.id }, headers: Record<string, string> = {}) => browser.request("POST", `/api/crumbs/${board.id}/reset`, { host: SHELL, headers: { ...ORIGIN, ...headers }, json: body });
 		celld.data.set(host, "precious");
 		// Refused before anything changes: not the owner, no confirmation, wrong item, cross-origin.
 		assert.equal((await reset(ada)).status, 404);
@@ -615,42 +615,42 @@ describe("trash and updates", () => {
 		assert.equal(ok.status, 200, ok.text);
 		assert.equal(celld.data.has(host), false, "the data is gone");
 		assert.equal(celld.sites.has(host), true, "the item runs again, on its app's code");
-		const grains = (await bob.request("GET", "/api/grains", { host: SHELL })).json.mine;
-		assert.equal(grains.find((g) => g.id === board.id)?.title, "Kitchen board", "the item itself stays");
+		const crumbs = (await bob.request("GET", "/api/crumbs", { host: SHELL })).json.mine;
+		assert.equal(crumbs.find((g) => g.id === board.id)?.title, "Kitchen board", "the item itself stays");
 	});
 	it("backs up any item and restores it, putting it back if a restore fails", async () => {
-		const host = grainHost(board.id);
+		const host = crumbHost(board.id);
 		const upload = (browser, path, body, headers = {}) =>
 			browser.request(path.endsWith("/import") ? "POST" : "PUT", path, { host: SHELL, headers: { ...ORIGIN, "content-type": "application/octet-stream", ...headers }, body });
 		celld.data.set(host, "version one");
-		const down = await bob.request("GET", `/api/grains/${board.id}/backup`, { host: SHELL });
+		const down = await bob.request("GET", `/api/crumbs/${board.id}/backup`, { host: SHELL });
 		assert.equal(down.status, 200, down.text);
 		assert.match(down.headers["content-disposition"], /^attachment; filename="Kitchen board \d{4}-\d\d-\d\d\.hamstr-backup"/);
 		const [head, ...rest] = down.text.trim().split("\n").map((l) => JSON.parse(l));
 		assert.deepEqual([head.type, head.app, head.appVersion, head.title], ["hamstr-backup", "board", "1.1.0", "Kitchen board"]);
 		assert.deepEqual(rest.map((l) => l.type), ["celld-dump", "note", "end"]);
-		assert.equal((await ada.request("GET", `/api/grains/${board.id}/backup`, { host: SHELL })).status, 404, "owner only");
-		assert.equal((await bob.request("GET", `/api/grains/${board.id}/backup`, { host: SHELL, headers: { "sec-fetch-site": "cross-site" } })).status, 403);
+		assert.equal((await ada.request("GET", `/api/crumbs/${board.id}/backup`, { host: SHELL })).status, 404, "owner only");
+		assert.equal((await bob.request("GET", `/api/crumbs/${board.id}/backup`, { host: SHELL, headers: { "sec-fetch-site": "cross-site" } })).status, 403);
 
 		celld.data.set(host, "changed later");
-		const r = await upload(bob, `/api/grains/${board.id}/backup`, down.text);
+		const r = await upload(bob, `/api/crumbs/${board.id}/backup`, down.text);
 		assert.equal(r.status, 200, r.text);
 		assert.equal(celld.data.get(host), "version one");
 
 		// Refused before anything changes.
 		const swap = (patch) => [JSON.stringify({ ...head, ...patch }), ...down.text.trim().split("\n").slice(1)].join("\n");
-		assert.equal((await upload(bob, `/api/grains/${board.id}/backup`, swap({ appVersion: "9.0.0" }))).status, 409, "made by a newer app");
-		assert.match((await upload(bob, `/api/grains/${board.id}/backup`, swap({ app: "plain", appName: "Plain" }))).json.error, /backup of Plain, not Board/);
-		assert.equal((await upload(bob, `/api/grains/${board.id}/backup`, "hello\n")).status, 422);
-		assert.equal((await upload(ada, `/api/grains/${board.id}/backup`, down.text)).status, 404, "owner only");
-		assert.equal((await upload(bob, `/api/grains/${board.id}/backup`, down.text, { origin: "http://evil.test" })).status, 403);
-		assert.equal((await upload(bob, `/api/grains/${board.id}/backup`, down.text, { "content-type": "text/plain" })).status, 415);
+		assert.equal((await upload(bob, `/api/crumbs/${board.id}/backup`, swap({ appVersion: "9.0.0" }))).status, 409, "made by a newer app");
+		assert.match((await upload(bob, `/api/crumbs/${board.id}/backup`, swap({ app: "plain", appName: "Plain" }))).json.error, /backup of Plain, not Board/);
+		assert.equal((await upload(bob, `/api/crumbs/${board.id}/backup`, "hello\n")).status, 422);
+		assert.equal((await upload(ada, `/api/crumbs/${board.id}/backup`, down.text)).status, 404, "owner only");
+		assert.equal((await upload(bob, `/api/crumbs/${board.id}/backup`, down.text, { origin: "http://evil.test" })).status, 403);
+		assert.equal((await upload(bob, `/api/crumbs/${board.id}/backup`, down.text, { "content-type": "text/plain" })).status, 415);
 		assert.equal(celld.data.get(host), "version one");
 
 		// A restore that fails half-way puts the item back.
 		celld.data.set(host, "current");
 		celld.failRestore = host;
-		const failed = await upload(bob, `/api/grains/${board.id}/backup`, down.text);
+		const failed = await upload(bob, `/api/crumbs/${board.id}/backup`, down.text);
 		assert.equal(failed.status, 422);
 		assert.match(failed.json.error, /put back as it was/);
 		assert.equal(celld.data.get(host), "current");
@@ -658,19 +658,19 @@ describe("trash and updates", () => {
 		// Importing makes a new item from the backup.
 		const made = await upload(bob, "/api/apps/board/import", down.text);
 		assert.equal(made.status, 201, made.text);
-		assert.equal(made.json.grain.title, "Kitchen board");
-		assert.notEqual(made.json.grain.id, board.id);
-		assert.equal(celld.data.get(grainHost(made.json.grain.id)), "version one");
+		assert.equal(made.json.crumb.title, "Kitchen board");
+		assert.notEqual(made.json.crumb.id, board.id);
+		assert.equal(celld.data.get(crumbHost(made.json.crumb.id)), "version one");
 		const before = celld.sites.size;
 		assert.equal((await upload(bob, "/api/apps/plain/import", down.text)).status, 422);
-		assert.equal(celld.sites.size, before, "a refused import leaves no grain behind");
-		await apiCall(bob, "POST", `/api/grains/${made.json.grain.id}/trash`, {});
-		assert.equal((await apiCall(bob, "DELETE", `/api/grains/${made.json.grain.id}`)).status, 200);
+		assert.equal(celld.sites.size, before, "a refused import leaves no crumb behind");
+		await apiCall(bob, "POST", `/api/crumbs/${made.json.crumb.id}/trash`, {});
+		assert.equal((await apiCall(bob, "DELETE", `/api/crumbs/${made.json.crumb.id}`)).status, 200);
 	});
 	it("uninstalls an app for everyone, deleting its items only when told to", async () => {
-		const bobs = (await apiCall(bob, "POST", "/api/apps/family/open", {})).json.grain;
-		const adas = (await apiCall(ada, "POST", "/api/apps/family/open", {})).json.grain;
-		await apiCall(ada, "POST", `/api/grains/${adas.id}/trash`, {});
+		const bobs = (await apiCall(bob, "POST", "/api/apps/family/open", {})).json.crumb;
+		const adas = (await apiCall(ada, "POST", "/api/apps/family/open", {})).json.crumb;
+		await apiCall(ada, "POST", `/api/crumbs/${adas.id}/trash`, {});
 		const info = await ada.request("GET", "/api/apps/family", { host: SHELL });
 		assert.deepEqual(info.json.usage, { items: 2, mine: 1, others: 1, people: 2 });
 		assert.equal((await apiCall(bob, "DELETE", "/api/apps/family?items=delete")).status, 403, "admins only");
@@ -678,12 +678,12 @@ describe("trash and updates", () => {
 		const kept = await apiCall(ada, "DELETE", "/api/apps/family");
 		assert.equal(kept.status, 409);
 		assert.match(kept.json.error, /2 items/);
-		assert.ok(celld.sites.has(grainHost(bobs.id)));
+		assert.ok(celld.sites.has(crumbHost(bobs.id)));
 		const r = await apiCall(ada, "DELETE", "/api/apps/family?items=delete");
 		assert.equal(r.status, 200, r.text);
 		assert.equal(r.json.deleted, 2);
-		for (const g of [bobs, adas]) assert.equal(celld.sites.has(grainHost(g.id)), false);
-		assert.equal((await bob.request("GET", `/api/grains/${bobs.id}`, { host: SHELL })).status, 404);
+		for (const g of [bobs, adas]) assert.equal(celld.sites.has(crumbHost(g.id)), false);
+		assert.equal((await bob.request("GET", `/api/crumbs/${bobs.id}`, { host: SHELL })).status, 404);
 		assert.equal((await bob.request("GET", "/api/apps/family", { host: SHELL })).status, 404);
 		assert.doesNotMatch((await bob.request("GET", "/", { host: SHELL })).text, /href="\/a\/family"/);
 		assert.equal((await apiCall(ada, "DELETE", "/api/apps/family")).status, 404);

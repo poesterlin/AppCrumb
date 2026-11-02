@@ -158,25 +158,25 @@ VM (10 vCPU, 8 GB node limit); treat them as orders of magnitude.
    returns them to `READ_TOKEN`, and the LAN dashboard (behind a password) shows
    them. Do not put secrets or unnecessary user identifiers in object names.
 
-## Proxy-only sites (Hamstr grains)
+## Proxy-only sites (Hamstr crumbs)
 
-Sites whose id starts with `PROXY_SITE_PREFIX` (default `grain-`) answer only
+Sites whose id starts with `PROXY_SITE_PREFIX` (default `crumb-`) answer only
 requests carrying `x-celld-proxy-token`, whose SHA-256 is the router's
 `PROXY_TOKEN_SHA256`; anything else gets the same 404 as a missing site, aliases
 included. The router strips the header before site code runs, on every site.
 This is what lets [Hamstr](../hamstr/README.md) hand apps identity headers they
-can trust: another container on the bridge cannot reach a grain directly or
-forge them. Without `PROXY_TOKEN` grain sites answer nobody.
+can trust: another container on the bridge cannot reach a crumb directly or
+forge them. Without `PROXY_TOKEN` crumb sites answer nobody.
 
 ## Home mode (no sign-in)
 
 `HAMSTR_AUTH=none` turns sign-in off: anyone who can reach Hamstr's port is its
-owner and can install apps, grant egress, and read or delete every grain. Only
-use it on a network where everyone is trusted. Grains are told apart by port:
+owner and can install apps, grant egress, and read or delete every crumb. Only
+use it on a network where everyone is trusted. Crumbs are told apart by port:
 browsers keep their storage and scripts apart (separate origins), but share
-cookies across ports, so a grain can read and set another grain's cookies.
-The grain proxy still refuses cross-origin writes, and the shell API still
-refuses requests from other origins, including grains.
+cookies across ports, so a crumb can read and set another crumb's cookies.
+The crumb proxy still refuses cross-origin writes, and the shell API still
+refuses requests from other origins, including crumbs.
 
 ## Sign-in (Hamstr accounts)
 

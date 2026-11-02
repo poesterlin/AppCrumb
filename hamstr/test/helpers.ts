@@ -116,7 +116,7 @@ export async function mockIdp({ clientId = "hamstr-test", clientSecret = "s3cret
 	return idp;
 }
 
-/** A celld stand-in: records admin calls, answers them, and echoes grain requests. */
+/** A celld stand-in: records admin calls, answers them, and echoes crumb requests. */
 export async function mockCelld({ adminToken = "admin-token", proxyToken = "proxy-token" }: { adminToken?: string; proxyToken?: string } = {}): Promise<MockCelld> {
 	const node: any = { adminToken, proxyToken, calls: [], sites: new Map(), failCheck: false, data: new Map(), failRestore: null, failActivate: null };
 	const server = createServer(async (req, res) => {
@@ -130,7 +130,7 @@ export async function mockCelld({ adminToken = "admin-token", proxyToken = "prox
 			const path = url.pathname.replace(/^\/__admin/, "");
 			node.calls.push({ method: req.method, path, query: Object.fromEntries(url.searchParams), body: body.toString() });
 			if (path === "/blobs/missing") return send(200, { missing: JSON.parse(body.toString()) });
-			// Backups: a grain's "data" is one string, dumped and restored as JSON lines.
+			// Backups: a crumb's "data" is one string, dumped and restored as JSON lines.
 			if (path === "/dump") {
 				const host = url.searchParams.get("host");
 				if (!node.sites.has(host)) return send(404, { error: "no site" });
@@ -164,13 +164,13 @@ export async function mockCelld({ adminToken = "admin-token", proxyToken = "prox
 			}
 			return send(200, { ok: true });
 		}
-		// A grain request through the proxy.
+		// A crumb request through the proxy.
 		if (req.headers["x-celld-proxy-token"] !== proxyToken || !node.sites.has(req.headers.host)) return send(404, { error: "no site" });
 		if (url.pathname === "/not-modified") return res.writeHead(304, { etag: '"v1"' }).end();
 		if (url.pathname === "/setcookie") {
 			return res
 				.writeHead(200, {
-					"set-cookie": ["app=1; Path=/", "wide=1; Domain=example.dev; Path=/", "hamstr_grain=evil; Path=/"],
+					"set-cookie": ["app=1; Path=/", "wide=1; Domain=example.dev; Path=/", "hamstr_crumb=evil; Path=/"],
 					"content-security-policy": "default-src 'self'",
 				})
 				.end("ok");

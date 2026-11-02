@@ -14,7 +14,7 @@ export function csp(core) {
 		"style-src 'self'",
 		"script-src 'self'",
 		"connect-src 'self'",
-		`frame-src ${core.grainSources}`,
+		`frame-src ${core.crumbSources}`,
 		"base-uri 'none'",
 		"form-action 'self'",
 		"frame-ancestors 'none'",
@@ -25,7 +25,7 @@ export function csp(core) {
  *  Appended to the policy SvelteKit builds for rendered pages (which already
  *  carries frame-ancestors from the static directives). */
 export function cspExtras(core) {
-	return [`frame-src ${core.grainSources}`, "form-action 'self'"];
+	return [`frame-src ${core.crumbSources}`, "form-action 'self'"];
 }
 
 function shellHeaders(core, extra = {}) {

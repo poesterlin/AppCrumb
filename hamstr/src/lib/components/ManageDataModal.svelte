@@ -1,5 +1,5 @@
 <script>
-	// The shell's "Manage data" dialog: any page calls askManage(grain, app). It
+	// The shell's "Manage data" dialog: any page calls askManage(crumb, app). It
 	// gathers what you can do with an item's data in one place; restoring and
 	// resetting continue in their own dialogs.
 	import { backupItem, downloadItem } from "#lib/client/actions.ts";
@@ -8,20 +8,20 @@
 	import Modal from "@hamstr/ui/components/Modal.svelte";
 	import AppIcon from "@hamstr/ui/components/AppIcon.svelte";
 
-	const grain = $derived(manageState.grain);
+	const crumb = $derived(manageState.crumb);
 	const app = $derived(manageState.app);
 
-	const close = () => Object.assign(manageState, { grain: null, app: null });
+	const close = () => Object.assign(manageState, { crumb: null, app: null });
 	/** Close this dialog, then run `act` with what it was about. */
 	const then = (act) => () => {
-		const [item, of] = [grain, app];
+		const [item, of] = [crumb, app];
 		close();
 		act(item, of);
 	};
 </script>
 
-{#if grain}
-	<Modal title="Manage data of “{grain.title}”" onclose={close}>
+{#if crumb}
+	<Modal title="Manage data of “{crumb.title}”" onclose={close}>
 		{#if app}
 			<div class="card-head gap-bottom">
 				<AppIcon {app} />

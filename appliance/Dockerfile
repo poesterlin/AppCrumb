@@ -63,7 +63,7 @@ ENV CELLD_ESBUILD=/usr/local/bin/esbuild \
 # runs everything as celld (run.sh). `--user 10001` skips that step.
 VOLUME /data
 # 8000 HTTP (redirects to HTTPS when TLS_MODE is set), 8443 HTTPS; in home
-# mode also a port per grain (HAMSTR_GRAIN_PORTS, default 20000-20999).
+# mode also a port per crumb (HAMSTR_CRUMB_PORTS, default 20000-20999).
 EXPOSE 8000 8443
 # Includes a loopback listener of Caddy's, so the check works in every mode.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=3 CMD ["/app/health.sh"]

@@ -3,19 +3,19 @@
 **Your little apps, and everything you make with them, in your own burrow.**
 
 Hamstr is a personal app platform in the spirit of [Sandstorm](https://sandstorm.io),
-built on a celld-sites node. A hamster hoards *grains*; so does Hamstr.
+built on a celld-sites node. A hamster hoards *crumbs*; so does Hamstr.
 
 - **Apps** come from the [Hamstr Store](../store/README.md). Developers publish
   with the `hamstr` CLI; everyone else only uses the web UI. *Home* is a
   launcher: every installed app is an icon there. An admin's *Get* in the store
   puts an app on everyone's Home at once; only an app that wants internet
   access asks first.
-- **Grains**: every board, list or draw you make is its own grain. A grain is
-  its own celld site at `grain-<id>.<domain>`, with its own Durable Objects
+- **Crumbs**: every board, list or draw you make is its own crumb. A crumb is
+  its own celld site at `crumb-<id>.<domain>`, with its own Durable Objects
   (its data) and no network access unless the app declares egress and an admin
-  allows it. Tapping an app shows the grains you made with it and a *New* tile
+  allows it. Tapping an app shows the crumbs you made with it and a *New* tile
   (a new one is called "Untitled …" until you rename it in the title bar). An
-  app that declares `"instances": "single"` has one grain per person instead:
+  app that declares `"instances": "single"` has one crumb per person instead:
   its icon opens it directly, and the first open creates it.
 - **Sign-in is the platform's job.** Hamstr signs people in (any OIDC provider
   such as tsidp, GitHub, passkeys) and tells each app who is visiting and what
@@ -29,44 +29,44 @@ built on a celld-sites node. A hamster hoards *grains*; so does Hamstr.
   in its `celld.json` sends visitors here; *Settings → Sites* decides who may
   open it (everyone let in, some groups and people, or anyone). See
   [docs/SITES.md](../docs/SITES.md#sign-in).
-- **Private by default.** A grain belongs to the person who made it; nobody
+- **Private by default.** A crumb belongs to the person who made it; nobody
   else on the Hamstr can list, open or download it. (Share links existed
   once and were removed; their old tables stay in the database, unused.)
 
 ## How it works
 
 ```
- browser ──▶ Traefik ──▶ Hamstr ─────────────────────────────▶ celld router ──▶ grain isolate
-             hamstr.<d>    shell UI, API, sign-in                 (site = grain-<id>.<d>)
-             grain-*.<d>   grain proxy:                            only answers requests
-                           · checks the grain session             that carry PROXY_TOKEN
+ browser ──▶ Traefik ──▶ Hamstr ─────────────────────────────▶ celld router ──▶ crumb isolate
+             hamstr.<d>    shell UI, API, sign-in                 (site = crumb-<id>.<d>)
+             crumb-*.<d>   crumb proxy:                            only answers requests
+                           · checks the crumb session             that carry PROXY_TOKEN
                            · drops X-Hamstr-* from the browser
                            · adds X-Hamstr-User-Id, -Username,
-                             -Permissions, -Role, -Grain-Id
+                             -Permissions, -Role, -Crumb-Id
 ```
 
-Opening a grain: the shell (`/g/<id>`) asks the API for a one-time ticket
-(60 s, single use, bound to that grain), loads
-`https://grain-<id>.<d>/.hamstr/enter?ticket=…` in an iframe, and the grain
-host turns the ticket into a grain session cookie. Every proxied request then
-re-checks access: signing out or trashing the grain
+Opening a crumb: the shell (`/c/<id>`) asks the API for a one-time ticket
+(60 s, single use, bound to that crumb), loads
+`https://crumb-<id>.<d>/.hamstr/enter?ticket=…` in an iframe, and the crumb
+host turns the ticket into a crumb session cookie. Every proxied request then
+re-checks access: signing out or trashing the crumb
 takes effect on the next request.
 
 Installing an app downloads the release from the store, verifies its SHA-256
 and contents (the shared bundle validator in `packages/app-format`), uploads the code to celld once, and
 boots it on a throwaway probe site (the deploy check) before anyone can use it.
-A new grain only stages and activates that version: **~65 ms** on the
+A new crumb only stages and activates that version: **~65 ms** on the
 development VM (10 vCPU); measure on your node. An
-app update moves every grain to the new version; their data stays and the
+app update moves every crumb to the new version; their data stays and the
 app's migrations run on first use.
 
 Measured on the development VM against a real celld node (`npm run e2e`): install 230 ms,
-new grain 65 ms, a proxied request ~1.5 ms more than going straight to celld.
+new crumb 65 ms, a proxied request ~1.5 ms more than going straight to celld.
 
 ## For app developers
 
 Write a normal celld site ([docs/SITES.md](../docs/SITES.md)) and publish it
-with `hamstr publish`. Inside a grain, read who is visiting from request headers:
+with `hamstr publish`. Inside a crumb, read who is visiting from request headers:
 
 | Header | Value |
 | --- | --- |
@@ -74,8 +74,8 @@ with `hamstr publish`. Inside a grain, read who is visiting from request headers
 | `X-Hamstr-Username` | display name, percent-encoded UTF-8 (`decodeURIComponent`) |
 | `X-Hamstr-Permissions` | comma-separated permission ids from your `hamstr.json` |
 | `X-Hamstr-Role` | always `owner` |
-| `X-Hamstr-Grain-Id` | this grain's id |
-| `X-Hamstr-Session-Id` | random per grain session |
+| `X-Hamstr-Crumb-Id` | this crumb's id |
+| `X-Hamstr-Session-Id` | random per crumb session |
 
 The owner holds every permission the app declares in `hamstr.json`
 (`"permissions": [{ "id": "pin", "title": "Pin notes" }]`), so an app written
@@ -85,7 +85,7 @@ manifests and ignored.
 Add `"instances": "single"` for an app people only need one of (a family
 board, a settings page): Home opens it straight away. The default, `"many"`,
 suits documents. In the API, `POST /api/apps/<slug>/open` finds or creates
-the visitor's one grain of a single-instance app.
+the visitor's one crumb of a single-instance app.
 
 **Download data.** Add `"export": "/export"` (any GET path in your app) and
 owners get *Download data* on the item's menu and title bar. Hamstr calls that
@@ -106,19 +106,19 @@ item's data: Hamstr first takes a safety copy, holds the item's traffic (503)
 while it runs, and puts the safety copy back if the restore fails half-way.
 A backup only goes into the same app, and not into an older version of it than
 the one that made it (update the app first); an older backup is migrated by the
-app's own code when the item next starts. API: `GET /api/grains/<id>/backup`,
-`PUT /api/grains/<id>/backup` (the file as `application/octet-stream`),
+app's own code when the item next starts. API: `GET /api/crumbs/<id>/backup`,
+`PUT /api/crumbs/<id>/backup` (the file as `application/octet-stream`),
 `POST /api/apps/<slug>/import`; owner only, up to 1 GiB.
 
 Notes:
 
-- These headers can be trusted *only* inside Hamstr grains: the router serves
-  `grain-*` sites only to the proxy, and the proxy overwrites them.
-- One grain = one site, so `env.OBJECTS.call("Board", "board", …)` names never
-  collide between grains. Don't put several documents in one grain.
-- A grain may set cookies for itself; cookies with a `Domain` attribute are
-  dropped (they would reach other grains and other services).
-- Don't rely on a `Referer` or on being top-level: grains run in the shell's
+- These headers can be trusted *only* inside Hamstr crumbs: the router serves
+  `crumb-*` sites only to the proxy, and the proxy overwrites them.
+- One crumb = one site, so `env.OBJECTS.call("Board", "board", …)` names never
+  collide between crumbs. Don't put several documents in one crumb.
+- A crumb may set cookies for itself; cookies with a `Domain` attribute are
+  dropped (they would reach other crumbs and other services).
+- Don't rely on a `Referer` or on being top-level: crumbs run in the shell's
   iframe (`frame-ancestors` is the shell only) and also open in their own tab.
 
 See `store/test/fixtures/pinboard` for a complete app that uses all of this.
@@ -126,8 +126,8 @@ See `store/test/fixtures/pinboard` for a complete app that uses all of this.
 ## Running it
 
 For a single trusted network there is also **home mode** (`HAMSTR_AUTH=none`):
-no sign-in, every visitor is the owner, and each grain is served on a port of
-its own (`HAMSTR_GRAIN_PORTS`) instead of a hostname. The appliance and the
+no sign-in, every visitor is the owner, and each crumb is served on a port of
+its own (`HAMSTR_CRUMB_PORTS`) instead of a hostname. The appliance and the
 Home Assistant add-on use it by default; see
 [appliance/README.md](../appliance/README.md#home-mode).
 
@@ -138,12 +138,12 @@ Hamstr is a compose service behind the `hamstr` profile, LAN-only (it holds
    `https://<HAMSTR_HOST>/auth/callback/tailscale` (the last part is the
    provider's id: its name in lowercase; tsidp: its web UI, or its `/register`
    endpoint).
-2. In `.env`: `COMPOSE_PROFILES=hamstr`, `HAMSTR_HOST`, `HAMSTR_GRAIN_DOMAIN`,
-   `HAMSTR_GRAINS_RULE`, `HAMSTR_PROXY_TOKEN`, `HAMSTR_SECRET` and the three
+2. In `.env`: `COMPOSE_PROFILES=hamstr`, `HAMSTR_HOST`, `HAMSTR_CRUMB_DOMAIN`,
+   `HAMSTR_CRUMBS_RULE`, `HAMSTR_PROXY_TOKEN`, `HAMSTR_SECRET` and the three
    `HAMSTR_OIDC_*` values (see `.env.example`). For celld sites that ask for
    sign-in, also `AUTH_KEY` and `AUTH_URL=https://<HAMSTR_HOST>/auth`.
 3. Restart **celld** so the router learns the proxy token and `AUTH_*`
-   (`docker compose up -d celld`); until then grain sites answer nobody.
+   (`docker compose up -d celld`); until then crumb sites answer nobody.
 4. `docker compose up -d hamstr`, open it and sign in first: that makes you
    the owner.
 
@@ -161,14 +161,14 @@ answers 409 while items exist unless called with `?items=delete`. If any
 item's site cannot be deleted, the app stays installed.
 
 Data: `hamstr-data` holds Hamstr's SQLite databases: `hamstr.db` (apps,
-grains) and `auth.db` (people, groups, sign-in providers with their secrets
-encrypted, sessions, site rules, the activity log). The grains' data is in the celld bucket like any site's. Back up both.
+crumbs) and `auth.db` (people, groups, sign-in providers with their secrets
+encrypted, sessions, site rules, the activity log). The crumbs' data is in the celld bucket like any site's. Back up both.
 
 ### Develop and test
 
 The UI and the JSON API are a SvelteKit app in `hamstr/src` (SSR, Svelte 5
 runes). `hamstr/server.ts` is the HTTP entrypoint: it routes on the Host
-header, proxies the grain hosts, and hands everything else to adapter-node. The
+header, proxies the crumb hosts, and hands everything else to adapter-node. The
 plain-Node modules in `hamstr/lib` hold the celld client, the proxy and
 `lib/auth` (accounts: people, groups, providers through `openid-client` and
 SimpleWebAuthn, per-site rules and the router's tokens), so the tests drive them
@@ -188,39 +188,39 @@ npm run playground --prefix hamstr  # http://hamstr.localhost:8795, seeded
 What Hamstr adds on top of [docs/SECURITY.md](../docs/SECURITY.md):
 
 - **Identity cannot be forged by apps or other containers.** The router answers
-  `grain-*` sites only with `x-celld-proxy-token` (it stores its SHA-256), strips
+  `crumb-*` sites only with `x-celld-proxy-token` (it stores its SHA-256), strips
   it before site code runs, and an alias cannot bypass the check. Hamstr drops
   every `X-Hamstr-*` header the browser sends.
-- **Grains cannot script each other.** Each grain is its own origin. Requests
-  from another origin (including other grains on the same domain) are refused
+- **Crumbs cannot script each other.** Each crumb is its own origin. Requests
+  from another origin (including other crumbs on the same domain) are refused
   unless they are navigations; state-changing requests must be same-origin
-  (`Sec-Fetch-Site`, falling back to `Origin`). Grain responses carry
+  (`Sec-Fetch-Site`, falling back to `Origin`). Crumb responses carry
   `frame-ancestors <shell>`, and the shell's iframe sandbox has no
   `allow-top-navigation` without a user click.
 - **Sessions**: shell sessions are server-side (logout revokes), cookies are
-  `__Host-` prefixed and HttpOnly. Grain sessions are tied to the shell session
+  `__Host-` prefixed and HttpOnly. Crumb sessions are tied to the shell session
   that opened them, so signing out ends them. Tickets are stored only as
   SHA-256.
 - **Sign-in** uses the authorization code flow with PKCE, `state` and `nonce`;
   the ID token's signature (JWKS), issuer, audience and expiry are checked.
-- **Cookie mode.** If the shell and the grains share a registrable domain
-  (`hamstr.example.com`, `grain-*.example.com`) the grain cookie is
+- **Cookie mode.** If the shell and the crumbs share a registrable domain
+  (`hamstr.example.com`, `crumb-*.example.com`) the crumb cookie is
   `SameSite=Lax`. On different sites it is `SameSite=None; Partitioned` (CHIPS),
   which Chrome, Edge and Firefox support; Safari may not.
 
 Limits worth knowing:
 
-- **Same parent domain.** Grains at `grain-*.example.com` share the parent
+- **Same parent domain.** Crumbs at `crumb-*.example.com` share the parent
   domain with your other services. App JavaScript can still set
   `document.cookie = "…; domain=example.com"` (the proxy only filters
-  `Set-Cookie` headers). For apps you don't trust, use a separate grain domain —
+  `Set-Cookie` headers). For apps you don't trust, use a separate crumb domain —
   that isolates cookies, not the runtime; a separate node is the real
   separation.
 - The runtime boundary is celld's (isolates in one process), not a VM and not
   yet a claimed hostile-app sandbox: see the checklist in docs/SECURITY.md. Run
   apps you trust. Moderation on the official store lowers risk; it is not
   containment.
-- No Powerbox yet (grains requesting access to each other), no WebSockets
+- No Powerbox yet (crumbs requesting access to each other), no WebSockets
   (celld has none).
 - A backup contains the item's data as stored, readable by anyone who has the
   file; restoring a hand-edited backup runs its `CREATE` statements (only

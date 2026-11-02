@@ -8,7 +8,7 @@ name: test
 #   integration  router API suite, CLI install (from the repo and as a packed
 #                npm package run from an empty directory), Hamstr end to end
 #   names        names server + agent + Pebble (Let's Encrypt's test CA)
-#   appliance    the one-container image: Hamstr, a grain and a site end to end,
+#   appliance    the one-container image: Hamstr, a crumb and a site end to end,
 #                restarts; HTTPS with the names agent against Pebble
 #   images       store and Hamstr images build (never pushed)
 

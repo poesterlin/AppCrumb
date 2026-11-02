@@ -2,15 +2,15 @@
 // store and their context menus, so every place offers the same things.
 import { goto, invalidateAll } from "$app/navigation";
 import { api } from "./api.ts";
-import { downloadBackup, downloadGrain } from "./download.ts";
+import { downloadBackup, downloadCrumb } from "./download.ts";
 import { askImport, askManage, askUninstall, oops, toast } from "./ui.svelte.ts";
 
 /** Open an app: a single-instance app goes straight into its one item. */
 export async function openApp(app) {
 	if (app.instances !== "single") return goto(`/a/${app.slug}`);
 	try {
-		const { grain } = await api(`/api/apps/${app.slug}/open`, { method: "POST", body: {} });
-		await goto(`/g/${grain.id}`);
+		const { crumb } = await api(`/api/apps/${app.slug}/open`, { method: "POST", body: {} });
+		await goto(`/c/${crumb.id}`);
 	} catch (err) {
 		oops(err);
 	}
@@ -18,34 +18,34 @@ export async function openApp(app) {
 
 async function newItem(app) {
 	try {
-		const { grain } = await api("/api/grains", { method: "POST", body: { slug: app.slug } });
-		await goto(`/g/${grain.id}`);
+		const { crumb } = await api("/api/crumbs", { method: "POST", body: { slug: app.slug } });
+		await goto(`/c/${crumb.id}`);
 	} catch (err) {
 		oops(err);
 	}
 }
 
-export async function downloadItem(grain) {
-	toast(`Preparing “${grain.title}”…`);
+export async function downloadItem(crumb) {
+	toast(`Preparing “${crumb.title}”…`);
 	try {
-		toast(`Downloaded ${await downloadGrain(grain.id)}`);
+		toast(`Downloaded ${await downloadCrumb(crumb.id)}`);
 	} catch (err) {
 		oops(err);
 	}
 }
 
-export async function backupItem(grain) {
-	toast(`Backing up “${grain.title}”…`);
+export async function backupItem(crumb) {
+	toast(`Backing up “${crumb.title}”…`);
 	try {
-		toast(`Downloaded ${await downloadBackup(grain.id)}`);
+		toast(`Downloaded ${await downloadBackup(crumb.id)}`);
 	} catch (err) {
 		oops(err);
 	}
 }
 
-export async function grainAction(grain, action, done) {
+export async function crumbAction(crumb, action, done) {
 	try {
-		await api(`/api/grains/${grain.id}/${action}`, { method: "POST", body: {} });
+		await api(`/api/crumbs/${crumb.id}/${action}`, { method: "POST", body: {} });
 		if (done) toast(done);
 		await invalidateAll();
 	} catch (err) {
@@ -68,12 +68,12 @@ export function appMenu(app, { admin = false, here = "" } = {}) {
 
 /** The menu of an item (not trashed). Pass `rename` where renaming is possible,
  *  and the item's app (from the page's data) for managing its data. */
-export function grainMenu(grain: any, { rename, app }: { rename?: any; app?: any } = {}) {
+export function crumbMenu(crumb: any, { rename, app }: { rename?: any; app?: any } = {}) {
 	return [
-		{ label: "Open", icon: "chevron", onclick: () => goto(`/g/${grain.id}`) },
-		{ label: "Open in a new tab", icon: "external", onclick: () => window.open(`/g/${grain.id}/open`, "_blank", "noopener") },
-		{ label: "Rename…", icon: "pencil", separator: true, hidden: !rename, onclick: () => rename(grain) },
-		{ label: "Manage data…", icon: "download", separator: !rename, hidden: !app, onclick: () => askManage(grain, app) },
-		{ label: "Move to trash", icon: "trash", danger: true, separator: true, onclick: () => grainAction(grain, "trash", "Moved to the trash") },
+		{ label: "Open", icon: "chevron", onclick: () => goto(`/c/${crumb.id}`) },
+		{ label: "Open in a new tab", icon: "external", onclick: () => window.open(`/c/${crumb.id}/open`, "_blank", "noopener") },
+		{ label: "Rename…", icon: "pencil", separator: true, hidden: !rename, onclick: () => rename(crumb) },
+		{ label: "Manage data…", icon: "download", separator: !rename, hidden: !app, onclick: () => askManage(crumb, app) },
+		{ label: "Move to trash", icon: "trash", danger: true, separator: true, onclick: () => crumbAction(crumb, "trash", "Moved to the trash") },
 	];
 }

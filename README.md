@@ -60,7 +60,7 @@ Then install **Hamstr**. Setup steps are in [ha-addon/DOCS.md](ha-addon/DOCS.md)
 
 - [Manual](docs-site/README.md): install, configure and use Hamstr, with a live compose generator
 - [Operations](docs/OPERATIONS.md): run and develop the platform
-- [Hamstr](hamstr/README.md): grains, accounts and sign-in
+- [Hamstr](hamstr/README.md): crumbs, accounts and sign-in
 - [Store](store/README.md): publish and install apps
 - [Sites](docs/SITES.md): how to build an app
 - [Security](docs/SECURITY.md): what apps can and cannot do

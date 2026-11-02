@@ -28,7 +28,7 @@ appliance: <name> stopped after <n> s
 | `HAMSTR_HOST must not be admin.internal` | `HAMSTR_HOST` is set to the internal admin name. Use your real hostname. |
 | `TLS_MODE=names: no Tailscale address found` | Set `ADDRESS_IPV4`, or run the container with the host network and Tailscale on the host. |
 | `no certificate yet; retrying` | DNS, provider credentials or the domain. It retries with backoff; see [HTTPS](#https-and-certificates). |
-| `address already in use` | Another service owns port 8000, 8443 or a grain port. |
+| `address already in use` | Another service owns port 8000, 8443 or a crumb port. |
 | Nothing, and the container exits | Out of memory. `docker inspect <container>` shows `.State.OOMKilled`; check the memory limit. |
 
 Check the health status too:
@@ -46,7 +46,7 @@ the log says which.
 2. Does the shell answer inside the container's network?
    `docker compose exec <container> curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/`
 3. Is the host port reachable? `curl -v http://127.0.0.1:8000/` from the host.
-4. Behind a proxy? Check the proxy's log and its upstream. The shell hostname and the grain wildcard must both point
+4. Behind a proxy? Check the proxy's log and its upstream. The shell hostname and the crumb wildcard must both point
    at the container.
 
 `404` from the shell for a random hostname is normal: Caddy answers only the hostnames it was configured for, and
@@ -90,18 +90,18 @@ docker compose exec hamstr date -u
 | 403 after sign-in | The person is not approved yet. The owner approves on **Settings → People**. |
 | Nobody can sign in | The first person owns it; if that account is gone, restore a backup. Keep a second method configured. |
 
-## Apps and grains
+## Apps and crumbs
 
 | Symptom | Check |
 | --- | --- |
 | Store page says no store | `HAMSTR_STORE` is empty or unreachable from the container. Test with `docker compose exec <container> curl -I <store-url>`. |
 | Install fails during the deploy check | The bundle is broken or needs a capability the node refused. The log has the check's error. |
-| Grain opens to an error | The grain hostname must reach the container: the grain wildcard is missing in DNS or the proxy. |
+| Crumb opens to an error | The crumb hostname must reach the container: the crumb wildcard is missing in DNS or the proxy. |
 | App is slow on first open | It is starting; a large app takes a moment. Subsequent opens are warm until celld sheds it. |
 | `503` from an app | The site is at `SITE_MAX_INFLIGHT`, or it is being restored/held by Hamstr. |
 | `the isolate is over its V8 heap limit` | Raise `CELLD_V8_HEAP_LIMIT_MB` and give the container more memory. |
 | App has no internet | It did not declare egress, or an admin has not allowed the hosts. |
-| Data looks empty after an update | The app's migration failed; check the app's error page, then restore the grain's backup. |
+| Data looks empty after an update | The app's migration failed; check the app's error page, then restore the crumb's backup. |
 
 ## Disk full
 

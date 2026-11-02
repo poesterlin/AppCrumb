@@ -101,9 +101,9 @@ const SHARE_KEYS: (keyof Options)[] = [
 	"nameServiceUrl",
 	"addressIpv4",
 	"proxyHost",
-	"proxyGrainDomain",
+	"proxyCrumbDomain",
 	"proxyHttps",
-	"grainPorts",
+	"crumbPorts",
 	"oidcName",
 	"oidcIssuer",
 	"oidcClientId",
@@ -207,7 +207,7 @@ onMounted(() => {
 				<label class="field">
 					<span class="label">Port</span>
 					<input v-model="o.httpPort" inputmode="numeric" autocomplete="off" />
-					<span class="help">Hamstr opens on this port. Each app gets its own port, starting at {{ o.grainPorts.split("-")[0] }}.</span>
+					<span class="help">Hamstr opens on this port. Each app gets its own port, starting at {{ o.crumbPorts.split("-")[0] }}.</span>
 				</label>
 			</template>
 
@@ -246,8 +246,8 @@ onMounted(() => {
 				</label>
 				<label class="field">
 					<span class="label">App domain</span>
-					<input v-model="o.proxyGrainDomain" type="text" placeholder="example.com" autocomplete="off" spellcheck="false" />
-					<span class="help">Your proxy must send <code>grain-*.{{ o.proxyGrainDomain || "example.com" }}</code> here too.</span>
+					<input v-model="o.proxyCrumbDomain" type="text" placeholder="example.com" autocomplete="off" spellcheck="false" />
+					<span class="help">Your proxy must send <code>crumb-*.{{ o.proxyCrumbDomain || "example.com" }}</code> here too.</span>
 				</label>
 				<label class="check">
 					<input v-model="o.proxyHttps" type="checkbox" />
@@ -348,7 +348,7 @@ onMounted(() => {
 				<template v-else>
 					<label class="field">
 						<span class="label">App ports</span>
-						<input v-model="o.grainPorts" autocomplete="off" />
+						<input v-model="o.crumbPorts" autocomplete="off" />
 						<span class="help">A range, for example <code>20000-20999</code>.</span>
 					</label>
 					<label class="check">

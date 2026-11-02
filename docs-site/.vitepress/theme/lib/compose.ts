@@ -36,9 +36,9 @@ export interface Options {
 	nameServiceUrl: string;
 	addressIpv4: string;
 	proxyHost: string;
-	proxyGrainDomain: string;
+	proxyCrumbDomain: string;
 	proxyHttps: boolean;
-	grainPorts: string;
+	crumbPorts: string;
 	oidcEnabled: boolean;
 	oidcName: string;
 	oidcIssuer: string;
@@ -125,7 +125,7 @@ export const DNS_PROVIDERS: DnsProvider[] = [
 
 export const IMAGE_REPOSITORY = "ghcr.io/poesterlin/celld-sites-appliance";
 export const DEFAULT_IMAGE_TAG = "0.3.2";
-export const DEFAULT_GRAIN_PORTS = "20000-20999";
+export const DEFAULT_CRUMB_PORTS = "20000-20999";
 
 export const SCENARIOS: { id: Scenario; label: string; blurb: string }[] = [
 	{
@@ -176,9 +176,9 @@ export function defaultOptions(): Options {
 		nameServiceUrl: envNameService(),
 		addressIpv4: "",
 		proxyHost: "hamstr.example.com",
-		proxyGrainDomain: "example.com",
+		proxyCrumbDomain: "example.com",
 		proxyHttps: true,
-		grainPorts: DEFAULT_GRAIN_PORTS,
+		crumbPorts: DEFAULT_CRUMB_PORTS,
 		oidcEnabled: false,
 		oidcName: "Tailscale",
 		oidcIssuer: "",
@@ -308,8 +308,8 @@ export function validate(o: Options): { errors: string[]; warnings: string[] } {
 	if (!o.hostNetwork && o.httpPort === o.httpsPort && o.scenario !== "proxy") {
 		errors.push("HTTP and HTTPS cannot use the same host port.");
 	}
-	if (isHome(o) && !/^\d{4,5}-\d{4,5}$/.test(o.grainPorts.trim())) {
-		errors.push("Grain ports must be a range like 20000-20999.");
+	if (isHome(o) && !/^\d{4,5}-\d{4,5}$/.test(o.crumbPorts.trim())) {
+		errors.push("Crumb ports must be a range like 20000-20999.");
 	}
 
 	if (o.scenario === "domain") {
@@ -341,11 +341,11 @@ export function validate(o: Options): { errors: string[]; warnings: string[] } {
 
 	if (o.scenario === "proxy") {
 		if (!isHostname(normaliseHost(o.proxyHost))) errors.push("Set the shell hostname your proxy will answer on.");
-		if (!isHostname(normaliseHost(o.proxyGrainDomain))) {
-			errors.push("Set the domain grains live under; grains are grain-<id>.<that domain>.");
+		if (!isHostname(normaliseHost(o.proxyCrumbDomain))) {
+			errors.push("Set the domain crumbs live under; crumbs are crumb-<id>.<that domain>.");
 		}
 		warnings.push(
-			"The proxy must route the shell hostname and *.grain domain to this container's HTTP port, and terminate TLS itself.",
+			"The proxy must route the shell hostname and *.crumb domain to this container's HTTP port, and terminate TLS itself.",
 		);
 		if (o.traefik && !o.proxyHttps) warnings.push("With Traefik labels on, TLS termination usually means HAMSTR_SCHEME=https.");
 	}
@@ -447,11 +447,11 @@ export function generate(o: Options): Generated {
 	} else if (o.scenario === "proxy") {
 		env.push(["TLS_MODE", "off"]);
 		env.push(["HAMSTR_HOST", normaliseHost(o.proxyHost)]);
-		env.push(["HAMSTR_GRAIN_DOMAIN", normaliseHost(o.proxyGrainDomain)]);
+		env.push(["HAMSTR_CRUMB_DOMAIN", normaliseHost(o.proxyCrumbDomain)]);
 		env.push(["HAMSTR_SCHEME", o.proxyHttps ? "https" : "http"]);
 	} else {
 		env.push(["HAMSTR_AUTH", "none"]);
-		env.push(["HAMSTR_GRAIN_PORTS", o.grainPorts.trim()]);
+		env.push(["HAMSTR_CRUMB_PORTS", o.crumbPorts.trim()]);
 		if (o.hostNetwork) env.push(["HTTP_PORT", o.httpPort.trim()]);
 	}
 
@@ -483,7 +483,7 @@ export function generate(o: Options): Generated {
 	if (!o.hostNetwork) {
 		service.ports = portMappings(o);
 	} else {
-		warnings.push("Host networking: the shell answers on HTTP_PORT and grains on their own ports; no ports are mapped.");
+		warnings.push("Host networking: the shell answers on HTTP_PORT and crumbs on their own ports; no ports are mapped.");
 	}
 
 	// limits and runtime
@@ -551,7 +551,7 @@ function shellQuote(value: string): string {
 export function portMappings(o: Options): string[] {
 	const loopback = o.bindLoopback && o.scenario !== "domain" && o.scenario !== "names" ? "127.0.0.1:" : "";
 	if (o.scenario === "home") {
-		return [`${loopback}${o.httpPort}:8000`, `${o.grainPorts.trim()}:${o.grainPorts.trim()}`];
+		return [`${loopback}${o.httpPort}:8000`, `${o.crumbPorts.trim()}:${o.crumbPorts.trim()}`];
 	}
 	if (o.scenario === "proxy") return [`${loopback}${o.httpPort}:8000`];
 	return [`${o.httpsPort}:8443`, `${o.httpPort}:8000`];
@@ -587,12 +587,12 @@ function dockerRunCommand(o: Options, env: [string, string][]): string {
 
 export function traefikLabels(o: Options): string[] {
 	const host = normaliseHost(o.proxyHost);
-	const grain = normaliseHost(o.proxyGrainDomain).replace(/\./g, "[.]");
+	const crumb = normaliseHost(o.proxyCrumbDomain).replace(/\./g, "[.]");
 	const router = o.containerName.trim();
 	return [
 		"traefik.enable=true",
 		"traefik.docker.network=traefik_web",
-		`traefik.http.routers.${router}.rule=Host(\`${host}\`) || HostRegexp(\`^grain-[a-z0-9]{12}[.]${grain}$\`)`,
+		`traefik.http.routers.${router}.rule=Host(\`${host}\`) || HostRegexp(\`^crumb-[a-z0-9]{12}[.]${crumb}$\`)`,
 		`traefik.http.routers.${router}.ruleSyntax=v3`,
 		`traefik.http.routers.${router}.priority=20`,
 		`traefik.http.services.${router}.loadbalancer.server.port=8000`,

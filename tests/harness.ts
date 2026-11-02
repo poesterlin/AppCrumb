@@ -46,7 +46,7 @@ export class Node {
 		this.adminToken = token();
 		this.readToken = token();
 		this.proxyToken = token();
-		this.proxyPrefix = "grain-";
+		this.proxyPrefix = "crumb-";
 		this.dir = mkdtempSync(join(tmpdir(), "celld-api-test-"));
 		this.env = {
 			...process.env,

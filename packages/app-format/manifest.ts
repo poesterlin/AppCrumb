@@ -170,7 +170,7 @@ export function validateManifest(input) {
 		for (const d of devices) if (!Object.hasOwn(DEVICES, d)) fail(`unknown device: ${d} (use ${Object.keys(DEVICES).join(", ")})`);
 	}
 
-	// Hamstr: a GET path in the app that answers with one grain's data as a file
+	// Hamstr: a GET path in the app that answers with one crumb's data as a file
 	// (JSON, CSV, a zip, ...). Hamstr calls it as the owner for "Download data".
 	if (input.export !== undefined) {
 		const path = input.export;
@@ -184,7 +184,7 @@ export function validateManifest(input) {
 }
 
 /** Optional permissions, read by Hamstr: what the app checks (sent in
- *  X-Hamstr-Permissions). The grain's owner holds every one. */
+ *  X-Hamstr-Permissions). The crumb's owner holds every one. */
 function validatePermissions(permInput) {
 	const textOf = (v, field, max) => (v === undefined ? undefined : str(v, field, 1, max));
 	let permissions = [];

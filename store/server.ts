@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { BUNDLE_LIMITS, BundleError, readBundle } from "../packages/app-format/bundle.ts";
 import { CATEGORIES, ManifestError, validateManifest, validatePublisherName, validateSlug, validateVersion } from "../packages/app-format/manifest.ts";
+import { clientIp as visitorIp, parseTrustedProxies, type ClientIpOptions } from "./client-ip.ts";
 import { type Db, importSqlite, isUniqueViolation, migrate, openDb, type Sql } from "./db.ts";
 import { refusePublisherName } from "./names.ts";
 import { logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, setTags, type StoreSettings } from "./releases.ts";
@@ -155,6 +156,10 @@ export interface StoreOptions {
 	requireReview?: boolean;
 	/** A request header the proxy in front sets to the visitor's address. */
 	clientIpHeader?: string;
+	/** Shared secret the proxy must send as X-Hamstr-Proxy before that header is trusted. */
+	proxySecret?: string;
+	/** CIDRs/IPs of proxies allowed to set the client-IP header (when no proxy secret). */
+	trustedProxies?: string[];
 	rateLimit?: boolean;
 	logging?: boolean;
 	name?: string;
@@ -183,6 +188,8 @@ export function createStore(options: StoreOptions = {}) {
 		databaseUrl: options.databaseUrl ?? process.env.DATABASE_URL ?? "",
 		requireReview: options.requireReview ?? process.env.STORE_REQUIRE_REVIEW === "1",
 		clientIpHeader: String(options.clientIpHeader ?? process.env.STORE_CLIENT_IP_HEADER ?? "").toLowerCase(),
+		proxySecret: String(options.proxySecret ?? process.env.STORE_PROXY_SECRET ?? ""),
+		trustedProxies: options.trustedProxies ?? parseTrustedProxies(process.env.STORE_TRUSTED_PROXIES),
 		// The operator's legal notice and privacy policy (a public site may
 		// need both, depending on jurisdiction): either links elsewhere (http(s)
 		// URLs), or HTML pages
@@ -398,16 +405,16 @@ export function createStore(options: StoreOptions = {}) {
 		bucket.count++;
 		return bucket.count > max;
 	}
-	// Rate limits are per visitor, so they need the visitor's address. Behind
-	// more than one proxy the last X-Forwarded-For hop is a proxy, and every
-	// visitor would share one bucket. Name a header your proxy sets itself
-	// (Traefik: x-real-ip) to use instead; never one a client can send.
-	const clientIp = (req) => {
-		const trusted = config.clientIpHeader ? String(req.headers[config.clientIpHeader] ?? "").trim() : "";
-		if (trusted) return trusted;
-		const forwarded = String(req.headers["x-forwarded-for"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-		return forwarded[forwarded.length - 1] || req.socket.remoteAddress || "?";
+	// Rate limits are per visitor. Behind Traefik the TCP peer is the proxy for
+	// everyone, so the proxy must attest the real client (X-Hamstr-Proxy secret
+	// or STORE_TRUSTED_PROXIES). See client-ip.ts — a bare X-Real-Ip is forgeable
+	// by any peer that can reach this port.
+	const ipOpts: ClientIpOptions = {
+		clientIpHeader: config.clientIpHeader,
+		proxySecret: config.proxySecret,
+		trustedProxies: config.trustedProxies,
 	};
+	const clientIp = (req: IncomingMessage) => visitorIp(req, ipOpts);
 	const tooMany = (res) => json(res, 429, { error: "too many requests, slow down" }, { "retry-after": "60" });
 	// Old buckets would otherwise pile up, one per client address.
 	const bucketTimer = setInterval(() => {

@@ -7,7 +7,7 @@
 //   X-Hamstr-Role         "owner" or the role id of the share link used
 //
 // Outside Hamstr nobody can send these headers to the app: the router serves
-// grain sites only to the proxy, and the proxy drops any the browser sends.
+// crumb sites only to the proxy, and the proxy drops any the browser sends.
 const COLORS = ["sun", "leaf", "sky", "rose", "sand"];
 
 const esc = (value) =>
