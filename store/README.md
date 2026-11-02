@@ -1,17 +1,17 @@
-# Hamstr Store
+# AppCrumb
 
-**Little apps for your own Hamstr.**
+**Tiny apps. Big ideas.**
 
-The Hamstr Store is the hosted catalog for tiny, single-purpose web apps that
+AppCrumb is the hosted catalog for tiny, single-purpose web apps that
 run on a personal [Hamstr](../hamstr/README.md) (or any
 [celld-sites](../README.md) node). A publisher ships one packed bundle; an
 admin presses **Get** in their Hamstr, or a developer runs one command. The
 store never runs app code, and the app's data never leaves the user's machine.
 
 The store is separate from the personal platform: people run Hamstr at home and
-never run a store. One store serves many Hamstrs. Both look the same because
-they share one design system ([`packages/ui`](../packages/ui)) and validate apps
-with the same code ([`packages/app-format`](../packages/app-format)).
+never run a store. One store serves many Hamstrs. They share the design system
+([`packages/ui`](../packages/ui)) and app validation ([`packages/app-format`](../packages/app-format)),
+while the store wears its own warm skin.
 
 This directory is a working prototype: the catalog UI, publisher API, CLI and
 the demo apps all run, and the test suites cover the store, the bundle format
@@ -104,7 +104,7 @@ data is yours" property.
 ## 2. Architecture
 
 ```
- publisher                    Hamstr Store (hosted)                       user's Hamstr / celld node
+ publisher                    AppCrumb (hosted)                       user's Hamstr / celld node
  ─────────                    ─────────────────────                       ──────────────────────────
  hamstr publish ./app
    pack.ts + tar.gz  ──────▶  POST /apps/:pub/:app/releases (manifest)

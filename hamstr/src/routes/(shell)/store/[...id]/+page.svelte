@@ -71,7 +71,7 @@
 
 	const storeLink = $derived(data.storePublic && app ? `${data.storePublic}/apps/${listing?.id ?? installed?.storeId ?? app.slug}` : null);
 	const menu = $derived([
-		{ label: "View in the Hamstr Store", icon: "external", hidden: !storeLink || !listing, onclick: () => window.open(storeLink, "_blank", "noopener") },
+		{ label: "View in AppCrumb", icon: "external", hidden: !storeLink || !listing, onclick: () => window.open(storeLink, "_blank", "noopener") },
 		{ label: "Uninstall…", icon: "trash", danger: true, separator: true, hidden: !(data.admin && installed), onclick: () => askUninstall(installed) },
 	]);
 	// Right click on the hero: the installed app's menu, or Get.
@@ -177,7 +177,7 @@
 						{#if listing?.source || installed?.source}<dt>Source</dt><dd><a href={listing?.source ?? installed.source} target="_blank" rel="noopener noreferrer">{(listing?.source ?? installed.source).replace(/^https?:\/\//, "")}</a></dd>{/if}
 					</dl>
 					{#if storeLink && listing}
-						<a class="button ghost small gap-top" href={storeLink} target="_blank" rel="noopener">{@html sized("external")} {data.detail?.demo?.available ? "Try a demo in the Hamstr Store" : "View in the Hamstr Store"}</a>
+						<a class="button ghost small gap-top" href={storeLink} target="_blank" rel="noopener">{@html sized("external")} {data.detail?.demo?.available ? "Try a demo in AppCrumb" : "View in AppCrumb"}</a>
 					{/if}
 				</aside>
 			</div>

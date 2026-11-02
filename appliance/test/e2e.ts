@@ -1,5 +1,5 @@
 // End to end against the appliance image (TLS_MODE=off): one container, nothing
-// else. A mock IdP and a real Hamstr Store run in this process; the container
+// else. A mock IdP and a real AppCrumb run in this process; the container
 // reaches them on docker0. S3, celld, Hamstr and Caddy are inside it.
 //
 //   docker build -f appliance/Dockerfile -t celld-appliance . && node appliance/test/e2e.ts

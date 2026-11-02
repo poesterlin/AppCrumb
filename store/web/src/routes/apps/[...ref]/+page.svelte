@@ -97,7 +97,7 @@
 		sending = true;
 		try {
 			await api(`/api/v1/apps/${app.id}/releases/${encodeURIComponent(reporting.version)}/report`, { method: "POST", body: { reason } });
-			toast("Report sent to the store team");
+			toast("Report sent to the AppCrumb team");
 			reporting = null;
 		} catch (err) {
 			toast(err.message, true);
@@ -117,7 +117,7 @@
 	const download = (release, kind = "download") => `/api/v1/apps/${app.id}/releases/${encodeURIComponent(release.version)}/${kind}`;
 </script>
 
-<svelte:head><title>{app ? `${app.name} · Hamstr Store` : "Hamstr Store"}</title></svelte:head>
+<svelte:head><title>{app ? `${app.name} · AppCrumb` : "AppCrumb"}</title></svelte:head>
 
 <div class="page">
 	<nav class="crumbs" aria-label="Breadcrumb">
@@ -234,7 +234,7 @@
 {/if}
 
 {#if reporting}
-	<Modal title="Report v{reporting.version}" sub="Tell the store team what is wrong with this release." onclose={() => (reporting = null)}>
+	<Modal title="Report v{reporting.version}" sub="Tell the AppCrumb team what is wrong with this release." onclose={() => (reporting = null)}>
 		<form onsubmit={sendReport}>
 			<div class="field">
 				<label for="reason">What's wrong?</label>

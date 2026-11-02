@@ -32,7 +32,7 @@ Read [Home mode](/install/home-mode) for the trade-offs before putting anything 
 
 | Option | Values | Meaning |
 | --- | --- | --- |
-| `store` | URL | The Hamstr Store apps come from. Without it there is nothing to install. |
+| `store` | URL | The AppCrumb URL to get apps from. Without it there is nothing to install. |
 | `auth` | `none`, `required` | `none` is home mode. `required` adds sign-in and needs `tls_mode`. |
 | `tls_mode` | `off`, `names`, `domain` | `off` only makes sense with `auth: none`. |
 | `domain` | hostname | `domain` mode: the domain with a `*.` record pointing at this box. |

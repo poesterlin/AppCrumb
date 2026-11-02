@@ -26,7 +26,7 @@ browser → Traefik → celld (router) → site → its Durable Objects
 | `tools/` | Deploy, preview, admin and backup scripts | core |
 | `sites/` | Example sites, each with a `RECIPE.md` | core (templates) |
 | `hamstr/` | Hamstr: crumbs, accounts, sign-in | core |
-| `store/` | The Hamstr Store and the `hamstr` CLI | core |
+| `store/` | AppCrumb and the `hamstr` CLI | core |
 | `appliance/` | Everything in one container | core |
 | `ha-addon/` | The Home Assistant add-on wrapper | optional |
 | `dashboard/` | A read-only status page | optional |
@@ -65,7 +65,7 @@ overlay works with the profiles below.
 Optional parts are compose profiles. Turn them on with `COMPOSE_PROFILES`:
 
 - `hamstr`: Hamstr
-- `store`: the Hamstr Store, its Postgres, its moderation site and its demo node
+- `store`: AppCrumb, its Postgres, its moderation site and its demo node
 - `tsidp`: sign in with Tailscale (one OIDC provider; any OIDC IdP works)
 
 ## Development and hosting

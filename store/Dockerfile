@@ -1,4 +1,4 @@
-# Hamstr Store: the catalog API (Node + Postgres + a directory of bundles), its
+# AppCrumb: the catalog API (Node + Postgres + a directory of bundles), its
 # web UI (a SvelteKit single-page app on the shared design system) and the
 # moderation site (`node store/moderation/server.ts`, same image). Build context
 # is the repo root: the store uses packages/app-format and packages/ui.

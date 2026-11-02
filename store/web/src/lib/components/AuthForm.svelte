@@ -20,10 +20,6 @@
 			<input id="password" class="input" type="password" bind:value={form.password} required minlength={signup ? 10 : 1} maxlength="200" autocomplete={signup ? "new-password" : "current-password"} />
 		</div>
 		{#if signup}
-			<div class="field">
-				<label for="repeat">Repeat the password</label>
-				<input id="repeat" class="input" type="password" bind:value={form.repeat} required minlength="10" maxlength="200" autocomplete="new-password" />
-			</div>
 			<label class="confirm-check policy-check"><input type="checkbox" bind:checked={form.accept} required /> I accept the <a href="/policy" target="_blank">content policy</a>.</label>
 			<p class="dim small">There is no email and no password reset yet: keep the password somewhere safe.</p>
 		{/if}

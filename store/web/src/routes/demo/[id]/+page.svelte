@@ -45,7 +45,7 @@
 	}
 </script>
 
-<svelte:head><title>{app ? `Try ${app.name}` : "Demo"} · Hamstr Store</title></svelte:head>
+<svelte:head><title>{app ? `Try ${app.name}` : "Demo"} · AppCrumb</title></svelte:head>
 
 {#if error || ended}
 	<div class="welcome">

@@ -1,4 +1,4 @@
-// Small presentation helpers shared by Hamstr and the Hamstr Store. Pure
+// Small presentation helpers shared by Hamstr and AppCrumb. Pure
 // functions, safe on both the server and in the browser.
 export const COLORS = ["c-sun", "c-leaf", "c-sky", "c-rose", "c-sand", "c-lilac"];
 

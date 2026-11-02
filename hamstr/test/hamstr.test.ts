@@ -1,4 +1,4 @@
-// Hamstr against a mock IdP, a mock celld node and a real Hamstr Store.
+// Hamstr against a mock IdP, a mock celld node and a real AppCrumb.
 // Run: npm test --prefix hamstr
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";

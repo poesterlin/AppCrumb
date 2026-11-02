@@ -104,7 +104,7 @@ These are accepted for self-hosted, first-party sites. They matter for a store.
 Because of the items below, we do not yet describe this runtime as a sandbox for
 deliberately hostile apps. That is a goal, not a current claim.
 
-Apps installed from the Hamstr Store land on the same node as your own sites, so
+Apps installed from AppCrumb land on the same node as your own sites, so
 every item below applies to them too. Mitigations in place: the CLI refuses to
 install over a site it did not create (unless `--replace`), both the CLI and
 Hamstr refuse a release without a published SHA-256, and Hamstr asks an admin

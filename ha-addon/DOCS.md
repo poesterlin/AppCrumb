@@ -17,7 +17,7 @@ Hamstr opens in its own tab, on this box's address, for example
 
 ## Get apps
 
-Apps come from a Hamstr Store. Set its address in the **App store** option,
+Apps come from AppCrumb. Set its address in the **App store** option,
 then restart the add-on.
 
 ## Home mode

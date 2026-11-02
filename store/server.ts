@@ -1,4 +1,4 @@
-// Hamstr Store: a small, self-hostable catalog and blob host for Hamstr apps.
+// AppCrumb: a small, self-hostable catalog and blob host for Hamstr apps.
 //
 // Design rules (see README.md):
 //  - The store never builds or executes an applet. Publishers upload a packed
@@ -205,7 +205,7 @@ export function createStore(options: StoreOptions = {}) {
 		logging: options.logging !== false,
 		maxBundle: BUNDLE_LIMITS.compressed,
 		limits: { source: 16 * 1024 * 1024, apps: 20, releases: 50, publisherBytes: 300 * 1024 * 1024, ...options.limits },
-		name: options.name ?? "Hamstr Store",
+		name: options.name ?? process.env.STORE_NAME ?? "AppCrumb",
 		demo: {
 			api: strip(options.demoApi ?? process.env.STORE_DEMO_API ?? ""),
 			token: options.demoToken ?? process.env.STORE_DEMO_ADMIN_TOKEN ?? "",
@@ -338,12 +338,16 @@ export function createStore(options: StoreOptions = {}) {
 	};
 	/** A cookie-signed request that changes something must come from the store's
 	 *  own pages: SameSite=Strict already keeps other sites' requests from
-	 *  carrying the cookie, and the Origin check covers browsers that ignore it. */
+	 *  carrying the cookie, and the Origin check covers browsers that ignore it.
+	 *  www and the apex count as the same site (CF often rewrites the Host). */
 	function sameOrigin(req: IncomingMessage): boolean {
 		const origin = String(req.headers.origin ?? "");
 		if (!origin) return false;
 		try {
-			return new URL(origin).host === String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "");
+			const bare = (host: string) => host.trim().toLowerCase().replace(/^www\./, "");
+			const from = bare(new URL(origin).host);
+			const to = bare(String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").split(",")[0] ?? "");
+			return Boolean(from && to && from === to);
 		} catch {
 			return false;
 		}

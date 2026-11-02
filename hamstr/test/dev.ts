@@ -1,4 +1,4 @@
-// Local playground: a celld dev node, a Hamstr Store with the example apps, a
+// Local playground: a celld dev node, an AppCrumb with the example apps, a
 // mock IdP that signs you in as Ada (admin), and Hamstr on http://hamstr.localhost:PORT.
 // Browsers resolve *.localhost to 127.0.0.1, so crumb hosts work too.
 //

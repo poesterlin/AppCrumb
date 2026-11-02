@@ -56,7 +56,7 @@ export function layout({ title, me, nav, counts, flash }: Shell, body: string): 
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${esc(title)} · Store moderation</title>
+<title>${esc(title)} · AppCrumb moderation</title>
 <link rel="stylesheet" href="/ui.css"><link rel="stylesheet" href="/moderation.css">
 </head><body>
 ${
@@ -96,7 +96,7 @@ export function loginPage(
 	return layout(
 		{ title: "Sign in" },
 		`<section class="panel login">
-		<h1>Store moderation</h1>
+		<h1>AppCrumb moderation</h1>
 		${oidc || password || `${error ? `<p class="callout error">${esc(error)}</p>` : ""}<p class="dim">Sign-in is not configured.</p>`}
 	</section>`,
 	);

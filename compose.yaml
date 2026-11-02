@@ -262,7 +262,7 @@ services:
       - 'traefik.http.routers.celld-sites-dashboard.rule=Host(`${DASHBOARD_HOST:?Set DASHBOARD_HOST in .env}`)'
       - 'traefik.http.services.celld-sites-dashboard.loadbalancer.server.port=3000'
 
-  # Postgres for the Hamstr Store and its moderation site: both read and write
+  # Postgres for AppCrumb and its moderation site: both read and write
   # the same tables (see store/db.ts). Only on the project network; nothing
   # outside the stack reaches it. Part of the store profile.
   store-db:
@@ -298,7 +298,7 @@ services:
     networks:
       - default
 
-  # Hamstr Store: the hosted app catalog (see store/README.md). It is not part
+  # AppCrumb: the hosted app catalog (see store/README.md). It is not part
   # of a personal Hamstr: personal nodes point HAMSTR_STORE at a store instead.
   # It runs here because this host also operates the store, so it, its database,
   # its moderation site and its demo node are off unless COMPOSE_PROFILES
@@ -473,7 +473,7 @@ services:
       HAMSTR_HOST: ${HAMSTR_HOST:-hamstr.example.com}
       HAMSTR_CRUMB_DOMAIN: ${HAMSTR_CRUMB_DOMAIN:-example.com}
       HAMSTR_SCHEME: https
-      # The Hamstr Store it gets apps from: the one in this stack by default, or
+      # The AppCrumb instance it gets apps from: the one in this stack by default, or
       # any other (HAMSTR_STORE=https://store.hamstr.app in .env).
       HAMSTR_STORE: ${HAMSTR_STORE:-http://store:3000}
       HAMSTR_STORE_PUBLIC: ${HAMSTR_STORE_PUBLIC:-https://${STORE_HOST:-store.example.com}}

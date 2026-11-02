@@ -1,8 +1,9 @@
 <script>
-		import { toast } from "@hamstr/ui/state.svelte.ts";
+		import { page } from "$app/state";
+	import { toast } from "@hamstr/ui/state.svelte.ts";
 	import { shortDate, size } from "@hamstr/ui/format.ts";
 	import { api } from "#lib/api.ts";
-	import { formProblem, releaseRequest } from "#lib/account.ts";
+	import { releaseRequest } from "#lib/account.ts";
 	import AppReleases from "#lib/components/AppReleases.svelte";
 	import AuthForm from "#lib/components/AuthForm.svelte";
 	import CliAccess from "#lib/components/CliAccess.svelte";
@@ -11,10 +12,10 @@
 	// never need one. The session is an HttpOnly cookie; this page never sees it.
 	let me = $state(null);
 	let loading = $state(true);
-	let mode = $state("signin");
+	let mode = $state(page.url.searchParams.get("mode") === "signup" ? "signup" : "signin");
 	let busy = $state(false);
 	let error = $state("");
-	let form = $state({ name: "", password: "", repeat: "", accept: false });
+	let form = $state({ name: "", password: "", accept: false });
 	let token = $state("");
 	let pw = $state({ current: "", next: "" });
 
@@ -45,12 +46,11 @@
 
 	async function submit(event) {
 		event.preventDefault();
-		error = formProblem(mode, form);
-		if (error) return;
+		error = "";
 		busy = true;
 		try {
 			await authenticate();
-			form = { name: "", password: "", repeat: "", accept: false };
+			form = { name: "", password: "", accept: false };
 			await load();
 		} catch (err) {
 			error = err.message;
@@ -109,7 +109,7 @@
 	}
 </script>
 
-<svelte:head><title>Publisher account · Hamstr Store</title></svelte:head>
+<svelte:head><title>Publisher account · AppCrumb</title></svelte:head>
 
 <div class="page narrow">
 	<p class="eyebrow dim">For publishers</p>

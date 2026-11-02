@@ -1,6 +1,6 @@
 # hamstr (CLI)
 
-Publish little apps to the [Hamstr Store](../README.md), and install them into a
+Publish little apps to the [AppCrumb](../README.md), and install them into a
 celld node. People who use Hamstr never need this: they press **Get** in their
 Hamstr. It is for app developers, and for running apps on a bare celld node.
 

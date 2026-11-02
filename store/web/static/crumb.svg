@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+	<!-- AppCrumb toast mark: two bread humps and a big face so it still reads
+	     as toast at 16 px. -->
+	<rect width="64" height="64" rx="15" fill="#FFD891"/>
+	<!-- crumbs, bottom-left like the mascot -->
+	<circle cx="10.5" cy="45.5" r="2.5" fill="#B5652F"/>
+	<circle cx="7" cy="50.5" r="1.6" fill="#B5652F"/>
+	<circle cx="14.5" cy="51.5" r="1.1" fill="#C97B3C"/>
+	<!-- toast: dark outline, orange crust, cream middle -->
+	<path d="M14 27c0-8 4.5-12.5 10-12.5 3.5 0 6 2 8 2s4.5-2 8-2c5.5 0 10 4.5 10 12.5v15c0 5.5-4.5 9-10 9H24c-5.5 0-10-3.5-10-9V27z" fill="#E09A5A" stroke="#3B241C" stroke-width="3.2" stroke-linejoin="round"/>
+	<path d="M18.5 27.5c0-6 3.5-9.5 7.5-9.5 3 0 5 2 6 2s3-2 6-2c4 0 7.5 3.5 7.5 9.5v14c0 4-3 6-7 6h-13c-4 0-7-2-7-6v-14z" fill="#FFF8ED"/>
+	<!-- face -->
+	<circle cx="28" cy="33.5" r="1.9" fill="#3B241C"/>
+	<circle cx="36" cy="33.5" r="1.9" fill="#3B241C"/>
+	<circle cx="25.2" cy="37.2" r="2.1" fill="#F4A7A0"/>
+	<circle cx="38.8" cy="37.2" r="2.1" fill="#F4A7A0"/>
+	<path d="M29.4 38c1.4 1.6 3.8 1.6 5.2 0" stroke="#3B241C" stroke-width="1.7" stroke-linecap="round"/>
+</svg>

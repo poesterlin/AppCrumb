@@ -133,7 +133,7 @@ export function createChecker({ db, blobsDir, policy: over = {}, classifier = nu
 		if (verdict === "block" && policy.autoBlock) {
 			// The publisher hears that, not which rule fired: the details are for
 			// moderators, not a guide to slipping past the checks.
-			const note = "The store's automatic checks blocked this release because it may harm the people who use it. A moderator reviews every blocked release and can reverse the decision.";
+			const note = "AppCrumb's automatic checks blocked this release because it may harm the people who use it. A moderator reviews every blocked release and can reverse the decision.";
 			return (await rejectRelease(sql, row.id, { by: "checks", note })) ? "rejected" : null;
 		}
 		if (verdict === "allow" && row.status === "pending" && (policy.autoApprove || (row.trusted && policy.autoApproveTrusted))) {

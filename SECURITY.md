@@ -68,7 +68,7 @@ Anything that breaks a property documented in `docs/SECURITY.md`, notably:
   version staged for another site, destructive calls without `confirm`.
 - Path traversal, symlink or upload handling that publishes files from outside a
   site's directory.
-- Vulnerabilities in the dashboard, Hamstr, the Hamstr Store, or the
+- Vulnerabilities in the dashboard, Hamstr, AppCrumb, or the
   container images and compose configuration in this repo.
 
 ## Out of scope

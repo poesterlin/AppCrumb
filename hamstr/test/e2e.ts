@@ -1,5 +1,5 @@
 // End to end against a throwaway local celld dev node (the repo's router under
-// `celld dev`), a real Hamstr Store, the real `hamstr publish`, and a mock IdP.
+// `celld dev`), a real AppCrumb, the real `hamstr publish`, and a mock IdP.
 //
 //   node hamstr/test/e2e.ts      (needs celld on PATH and tools' npm deps)
 //

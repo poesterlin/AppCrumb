@@ -516,6 +516,11 @@ describe("publisher accounts", () => {
 		const forged = await web("/api/v1/tokens", { method: "POST", cookie, headers: { origin: "https://evil.example" } });
 		assert.equal(forged.status, 403);
 		assert.equal((await web("/api/v1/tokens", { method: "POST", cookie })).status, 403, "no Origin header");
+		// www and the apex are the same site (tunnel Host rewrites are common).
+		assert.equal(
+			(await web("/api/v1/tokens", { method: "POST", cookie, headers: { origin: "https://www.appcrumb.store", "x-forwarded-host": "appcrumb.store" } })).status,
+			201,
+		);
 		// From the store's own pages, a session mints a CLI token without the password.
 		const minted = await web("/api/v1/tokens", { method: "POST", cookie, headers: { origin: origin() } });
 		assert.equal(minted.status, 201);

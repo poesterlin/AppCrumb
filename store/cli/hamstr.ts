@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Hamstr CLI: publish apps to the Hamstr Store, install them into a celld node.
+// Hamstr CLI: publish apps to AppCrumb, install them into a celld node.
 //
 //   hamstr register <name> --store <url>
 //   hamstr login <name> --store <url>
@@ -603,7 +603,7 @@ async function list(opts) {
 }
 
 function usage() {
-	console.log(`hamstr ${VERSION} — publish little apps to the Hamstr Store, install them into a celld node
+	console.log(`hamstr ${VERSION} — publish little apps to AppCrumb, install them into a celld node
 
 Publishing
   register <name> --store <url>       create a publisher and save a token

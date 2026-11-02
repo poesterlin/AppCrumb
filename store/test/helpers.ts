@@ -1,4 +1,4 @@
-// Shared fixtures for Hamstr Store tests: build real tar.gz bundles and call the API.
+// Shared fixtures for AppCrumb tests: build real tar.gz bundles and call the API.
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { gzipSync } from "node:zlib";

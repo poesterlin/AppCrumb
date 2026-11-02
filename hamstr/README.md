@@ -5,7 +5,7 @@
 Hamstr is a personal app platform in the spirit of [Sandstorm](https://sandstorm.io),
 built on a celld-sites node. A hamster hoards *crumbs*; so does Hamstr.
 
-- **Apps** come from the [Hamstr Store](../store/README.md). Developers publish
+- **Apps** come from the [AppCrumb](../store/README.md). Developers publish
   with the `hamstr` CLI; everyone else only uses the web UI. *Home* is a
   launcher: every installed app is an icon there. An admin's *Get* in the store
   puts an app on everyone's Home at once; only an app that wants internet
@@ -178,7 +178,7 @@ SimpleWebAuthn, per-site rules and the router's tokens), so the tests drive them
 without a browser.
 
 ```sh
-npm test --prefix hamstr            # mock IdP, mock celld, real Hamstr Store, accounts
+npm test --prefix hamstr            # mock IdP, mock celld, real AppCrumb, accounts
 npm run e2e --prefix hamstr         # real celld dev node, real `hamstr publish`, Pinboard
 npm run playground --prefix hamstr  # http://hamstr.localhost:8795, seeded
 ```

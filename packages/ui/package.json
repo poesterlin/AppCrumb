@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.1.0",
 	"type": "module",
-	"description": "Hamstr's design system: styles, icons, helpers and Svelte components shared by the Hamstr shell and the Hamstr Store",
+	"description": "Hamstr's design system: styles, icons, helpers and Svelte components shared by the Hamstr shell and AppCrumb",
 	"exports": {
 		"./*": "./*"
 	},

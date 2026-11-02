@@ -1,7 +1,7 @@
 # @hamstr/app-format
 
 The Hamstr app format, validated by the same code everywhere an app passes
-through: the Hamstr Store when a publisher uploads, the `hamstr` CLI before it
+through: AppCrumb when a publisher uploads, the `hamstr` CLI before it
 uploads or installs, and Hamstr before it installs.
 
 - `manifest.ts`: the `hamstr.json` manifest (name, version, egress hosts,

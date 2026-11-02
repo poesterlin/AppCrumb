@@ -30,7 +30,7 @@ The repository's own `compose.yaml` is a different thing from the appliance:
 
 - it builds the images from source instead of pulling one;
 - it runs each part as its own service with its own limits;
-- it adds a read-only dashboard, the Hamstr Store, its Postgres, the moderation site and a demo node;
+- it adds a read-only dashboard, AppCrumb, its Postgres, the moderation site and a demo node;
 - it expects Traefik on an external `traefik_web` network.
 
 That stack is for developing this project or operating a node that publishes apps to a store. It is documented in

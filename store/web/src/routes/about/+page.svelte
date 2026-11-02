@@ -2,19 +2,19 @@
 	import { ICON } from "@hamstr/ui/icons.ts";
 </script>
 
-<svelte:head><title>How it works · Hamstr Store</title></svelte:head>
+<svelte:head><title>How it works · AppCrumb</title></svelte:head>
 
 <div class="page narrow">
 	<p class="eyebrow dim">How it works</p>
 	<h1>Your apps, on your machine</h1>
 	<p class="dim lead">
-		The Hamstr Store is a catalog. The apps run on your own Hamstr at home, and everything you make with them stays there.
+		AppCrumb is a catalog — a cozy home for little apps. They run on your own Hamstr at home, and everything you make with them stays there.
 	</p>
 
 	<div class="caps gap-top">
 		<div class="cap">
 			<span class="cap-icon">{@html ICON.grid}</span>
-			<div><strong>The store only lists apps</strong><p class="dim small">It keeps each app's files and checksum. It never runs an app, and it can't reach your Hamstr.</p></div>
+			<div><strong>AppCrumb only lists apps</strong><p class="dim small">It keeps each app's files and checksum. It never runs an app, and it can't reach your Hamstr.</p></div>
 		</div>
 		<div class="cap">
 			<span class="cap-icon">{@html ICON.download}</span>
@@ -50,7 +50,7 @@
 	<section class="section">
 		<h2>What to trust</h2>
 		<ul class="steps">
-			<li>The store team sees every app and can remove releases. Publishing does not make code private.</li>
+			<li>The AppCrumb team sees every app and can remove releases. Publishing does not make code private.</li>
 			<li>Apps are not signed yet. The checksum protects the download, not who wrote it.</li>
 			<li>
 				Hamstr isolates apps from each other and gives them no internet unless you allow it. We do not yet claim

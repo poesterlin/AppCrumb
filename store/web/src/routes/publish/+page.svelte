@@ -20,16 +20,16 @@
 	);
 </script>
 
-<svelte:head><title>Publish · Hamstr Store</title></svelte:head>
+<svelte:head><title>Publish · AppCrumb</title></svelte:head>
 
 <div class="page narrow">
 	<p class="eyebrow dim">For developers</p>
 	<h1>Publish a little app</h1>
-	<p class="dim lead">Build it with the normal celld tooling, describe it in hamstr.json, and upload it with the hamstr command-line tool. The store never runs your build.</p>
+	<p class="dim lead">Build it with the normal celld tooling, describe it in hamstr.json, and upload it with the hamstr command-line tool. AppCrumb never runs your build.</p>
 
 	<section class="panel gap-top">
 		<h2>1. Create a publisher account</h2>
-		<p><a class="button small" href="/account">Create an account</a> <span class="dim small">or, from a terminal:</span></p>
+		<p><a class="button small" href="/account?mode=signup">Create an account</a> <span class="dim small">or, from a terminal:</span></p>
 		<pre class="code"><code>hamstr register your-name --store {origin}
 hamstr login your-name --store {origin}</code></pre>
 		<p class="dim small">An account is only for publishing. By creating one you accept the <a href="/policy">content policy</a>. The CLI saves its token in ~/.config/hamstr/config.json (mode 600). There is no email and no password reset yet.</p>

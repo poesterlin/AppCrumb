@@ -91,7 +91,7 @@ makes an app safe to run.
 
 Do not confuse the two roles:
 
-| | Personal Hamstr | Hamstr Store |
+| | Personal Hamstr | AppCrumb |
 | --- | --- | --- |
 | Runs app code | yes | no |
 | Holds crumb data | yes | no |

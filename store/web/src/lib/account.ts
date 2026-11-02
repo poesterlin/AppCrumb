@@ -38,6 +38,3 @@ export function tokenSummary(tokens) {
 	const used = tokens.lastUsedAt ? `, last used ${timeAgo(tokens.lastUsedAt)}` : "";
 	return `You have ${tokens.count} token${tokens.count === 1 ? "" : "s"}${used}.`;
 }
-
-/** Why the sign-in or sign-up form cannot be sent yet, or "". */
-export const formProblem = (mode, form) => (mode === "signup" && form.password !== form.repeat ? "The passwords do not match." : "");

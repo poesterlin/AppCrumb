@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4bf"/><stop offset=".55" stop-color="#0d9488"/><stop offset="1" stop-color="#0f766e"/></linearGradient><clipPath id="c"><rect width="64" height="64" rx="18"/></clipPath></defs><rect width="64" height="64" rx="18" fill="url(#g)"/><g clip-path="url(#c)"><path d="M0 0h64v14H0z" fill="#fff" fill-opacity=".92"/><path d="M0 0h8v14H0zM16 0h8v14h-8zM32 0h8v14h-8zM48 0h8v14h-8z" fill="#f59e0b"/><path d="M0 14c2 5 6 5 8 0 2 5 6 5 8 0 2 5 6 5 8 0 2 5 6 5 8 0 2 5 6 5 8 0 2 5 6 5 8 0 2 5 6 5 8 0 2 5 6 5 8 0z" fill="#fff" fill-opacity=".92"/><path d="M8 14c0 5 8 5 8 0zM24 14c0 5 8 5 8 0zM40 14c0 5 8 5 8 0zM56 14c0 5 8 5 8 0z" fill="#f59e0b"/></g><circle cx="22" cy="30" r="5" fill="#fff" fill-opacity=".9"/><circle cx="42" cy="30" r="5" fill="#fff" fill-opacity=".9"/><path d="M32 27c9.5 0 15.5 6.5 15.5 14.5S41.5 54 32 54s-15.5-4.5-15.5-12.5S22.5 27 32 27z" fill="#fff"/><circle cx="26.5" cy="40" r="2" fill="#0f5c55"/><circle cx="37.5" cy="40" r="2" fill="#0f5c55"/><path d="M30.5 45h3L32 46.8z" fill="#0f5c55" stroke="#0f5c55" stroke-linejoin="round" stroke-width="1.1"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+	<!-- AppCrumb toast mark: two bread humps and a big face so it still reads
+	     as toast at 16 px. -->
+	<rect width="64" height="64" rx="15" fill="#FFD891"/>
+	<!-- crumbs, bottom-left like the mascot -->
+	<circle cx="10.5" cy="45.5" r="2.5" fill="#B5652F"/>
+	<circle cx="7" cy="50.5" r="1.6" fill="#B5652F"/>
+	<circle cx="14.5" cy="51.5" r="1.1" fill="#C97B3C"/>
+	<!-- toast: dark outline, orange crust, cream middle -->
+	<path d="M14 27c0-8 4.5-12.5 10-12.5 3.5 0 6 2 8 2s4.5-2 8-2c5.5 0 10 4.5 10 12.5v15c0 5.5-4.5 9-10 9H24c-5.5 0-10-3.5-10-9V27z" fill="#E09A5A" stroke="#3B241C" stroke-width="3.2" stroke-linejoin="round"/>
+	<path d="M18.5 27.5c0-6 3.5-9.5 7.5-9.5 3 0 5 2 6 2s3-2 6-2c4 0 7.5 3.5 7.5 9.5v14c0 4-3 6-7 6h-13c-4 0-7-2-7-6v-14z" fill="#FFF8ED"/>
+	<!-- face -->
+	<circle cx="28" cy="33.5" r="1.9" fill="#3B241C"/>
+	<circle cx="36" cy="33.5" r="1.9" fill="#3B241C"/>
+	<circle cx="25.2" cy="37.2" r="2.1" fill="#F4A7A0"/>
+	<circle cx="38.8" cy="37.2" r="2.1" fill="#F4A7A0"/>
+	<path d="M29.4 38c1.4 1.6 3.8 1.6 5.2 0" stroke="#3B241C" stroke-width="1.7" stroke-linecap="round"/>
+</svg>

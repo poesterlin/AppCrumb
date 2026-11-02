@@ -1,4 +1,4 @@
-<svelte:head><title>Content policy · Hamstr Store</title></svelte:head>
+<svelte:head><title>Content policy · AppCrumb</title></svelte:head>
 
 <div class="page narrow prose-page">
 	<p class="eyebrow dim">For publishers</p>
