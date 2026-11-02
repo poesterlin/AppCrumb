@@ -130,4 +130,14 @@ describe("home mode", () => {
 		assert.equal(r.status, 503);
 		assert.match(r.json.error, /crumb ports/);
 	});
+
+	it("redeploys crumb sites under the current host when they are missing", async () => {
+		const host = `crumb-${board.id}.crumbs.internal`;
+		assert.equal(celld.sites.has(host), true);
+		celld.sites.delete(host);
+		assert.equal((await onCrumb(FIRST_PORT, "GET", "/")).status, 404, "proxy 404s when celld has no site");
+		await hamstr.core.ensureCrumbSites();
+		assert.equal(celld.sites.has(host), true);
+		assert.equal((await onCrumb(FIRST_PORT, "GET", "/")).status, 200, "ensureCrumbSites puts the site back");
+	});
 });

@@ -846,10 +846,35 @@ export function createCore(options: CoreOptions = {}) {
 			if (!installing.size && !tempFiles.has(join(tmpDir, name))) rmSync(join(tmpDir, name), { recursive: true, force: true });
 		}
 	}
+
+	/** Redeploy every live crumb under the current crumbHost. After the grains→crumbs
+	 *  rename (and any host/prefix change), SQLite still has the crumbs but celld's
+	 *  sites stay under the old names; without this the port proxy 404s. */
+	async function ensureCrumbSites() {
+		const rows = db.prepare("SELECT * FROM crumbs WHERE trashed_at IS NULL").all();
+		for (const crumb of rows) {
+			const app = q.app.get(crumb.slug);
+			if (!app) continue;
+			try {
+				await celld.deployCrumb(crumbHost(crumb.id), String(crumb.code_version), manifestOf(app).egress ?? []);
+			} catch (err) {
+				console.error(`hamstr: ensuring site for crumb ${crumb.id} failed`, err.message);
+			}
+		}
+	}
+
 	const timer = setInterval(() => housekeeping().catch((err) => console.error("hamstr: housekeeping failed", err)), 10 * 60 * 1000);
 	timer.unref();
+	const deferred: ReturnType<typeof setTimeout>[] = [];
+	const later = (ms: number, work: () => Promise<unknown>, label: string) => {
+		const t = setTimeout(() => work().catch((err) => console.error(`hamstr: ${label} failed`, err)), ms);
+		t.unref();
+		deferred.push(t);
+	};
 	// Apps installed before namespaces learn their <publisher>/<app> from the store.
-	if (activeStore()) setTimeout(() => backfillStoreIds().catch(() => {}), 2000).unref();
+	if (activeStore()) later(2000, () => backfillStoreIds(), "backfilling store ids");
+	// Covers restarts and the grains→crumbs host rename. Idempotent when already current.
+	later(1500, () => ensureCrumbSites(), "ensuring crumb sites");
 
 	return {
 		NAME,
@@ -916,8 +941,10 @@ export function createCore(options: CoreOptions = {}) {
 		issueTicket,
 		crumbVisitor,
 		housekeeping,
+		ensureCrumbSites,
 		close() {
 			clearInterval(timer);
+			for (const t of deferred) clearTimeout(t);
 			db.close();
 			accounts.db.close();
 		},
