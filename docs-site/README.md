@@ -60,29 +60,34 @@ and prefer a clear sentence over a jargon label.
 
 ## Deploying the manual
 
-The build is plain static files, and `celld.json` points the packer at `.vitepress/dist`. So the manual can run as a
-plain celld site:
+The public manual is **[docs.appcrumb.store](https://docs.appcrumb.store)**: a plain celld site on the AppCrumb host
+(tunnel → Traefik → celld). The build is static files; `celld.json` points the packer at `.vitepress/dist`.
 
 ```sh
 npm run build
-cd .. && tools/deploy.sh docs-site docs.example.com
+cd ..
+bundle=$(mktemp -d)
+node tools/pack.ts docs-site "$bundle"
+tar -C "$bundle" -cf - . | ssh public-vm \
+  'docker compose -f /opt/stacks/celld-sites/compose.yaml \
+    -f /opt/stacks/celld-sites/compose.w3.yaml \
+    -f /opt/stacks/celld-sites/compose.local-image.yaml \
+    exec -T celld /app/push.sh docs.appcrumb.store'
+rm -rf "$bundle"
 ```
 
-The hostname must match the node's `SITES_RULE` (see the root `.env.example`), and the deploy check requests `/`, which
-the build has.
-
-Any static host works too: point it at `.vitepress/dist`.
+The hostname must match the node's `SITES_RULE`. The deploy check requests `/`.
 
 ## Publishing to the store
 
-`hamstr.json` makes the same build installable as a Hamstr app (`instances: "single"`, no egress, no permissions):
+`hamstr.json` makes the same build installable as a Hamstr app (`instances: "single"`, no egress, no permissions), so
+people can also **Get** the manual inside Hamstr:
 
 ```sh
-node store/cli/hamstr.ts publish docs-site --store https://store.example.com
+node store/cli/hamstr.ts publish docs-site --store https://appcrumb.store
 ```
 
-It builds, packs, validates and uploads. Bump `version` in `hamstr.json` for every release; a published version can
-never be replaced. The app is `learning` and static, so it needs no egress consent.
+Bump `version` in `hamstr.json` for every release; a published version can never be replaced.
 
 ## Writing style
 

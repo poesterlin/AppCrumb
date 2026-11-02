@@ -1,7 +1,4 @@
 configuration:
-  store:
-    name: App store
-    description: Address of AppCrumb to install apps from, for example https://store.example.com
   auth:
     name: Sign-in
     description: "none: home mode, anyone on your network is the owner. required: people sign in (needs tls_mode and a sign-in provider)."

@@ -27,7 +27,7 @@
 
 <Modal title={store?.id ? `Edit ${store.name}` : "Add a store"} sub="Browse and install use the active store. You can register several and switch which one is active." {onclose}>
 	<div class="field"><label for="sn">Name</label><input id="sn" class="input" bind:value={draft.name} placeholder="Shown in Settings" data-autofocus /></div>
-	<div class="field"><label for="su">Store URL</label><input id="su" class="input" type="url" bind:value={draft.url} placeholder="https://store.example.com" autocomplete="off" spellcheck="false" /></div>
+	<div class="field"><label for="su">Store URL</label><input id="su" class="input" type="url" bind:value={draft.url} placeholder="https://appcrumb.store" autocomplete="off" spellcheck="false" /></div>
 	<div class="field"><label for="sp">Public URL <span class="dim">(optional)</span></label><input id="sp" class="input" type="url" bind:value={draft.publicUrl} placeholder="Same as store URL" autocomplete="off" spellcheck="false" /></div>
 	<p class="dim small">Use a public URL when Hamstr reaches the store on an internal address but links should open the public one.</p>
 	<div class="sheet-foot"><button class="button" type="button" onclick={save} disabled={!draft.url.trim()}>Save</button></div>

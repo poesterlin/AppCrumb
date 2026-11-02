@@ -496,9 +496,9 @@ no email verification; no signing; no per-publisher storage billing. See §8.
 
 ## 5. Hosting the store and going public
 
-A personal Hamstr does not run a store; it points `HAMSTR_STORE` at one. The
-root `compose.yaml` includes the store (and its demo node) for the host that
-operates it, behind the `store` compose profile:
+A personal Hamstr does not run a store; it points at [AppCrumb](https://appcrumb.store)
+by default (`HAMSTR_STORE`). The root `compose.yaml` includes a store (and its demo
+node) for operators developing or hosting a catalog, behind the `store` compose profile:
 
 ```sh
 # .env

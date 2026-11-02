@@ -53,7 +53,7 @@ See [People and groups](/using/people).
 ## Store
 
 A catalog of apps, separate from your install. It stores metadata and bundles; it never runs app code. Your Hamstr
-points at one active store (Settings → Stores; `HAMSTR_STORE` seeds the first), or at none.
+points at one active store — usually [AppCrumb](https://appcrumb.store) (Settings → Stores; `HAMSTR_STORE` seeds the first).
 
 An admin's **Get** installs an app for everyone. A publisher's release is immutable once published; updating an app
 moves every crumb to the new version, and the data stays.

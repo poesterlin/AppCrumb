@@ -316,7 +316,7 @@ onMounted(() => {
 				<h3>Apps</h3>
 				<label class="field">
 					<span class="label">App store</span>
-					<input v-model="o.storeUrl" type="url" placeholder="https://store.hamstr.app" autocomplete="off" spellcheck="false" />
+					<input v-model="o.storeUrl" type="url" placeholder="https://appcrumb.store" autocomplete="off" spellcheck="false" />
 					<span class="help">Where apps come from. Leave it empty for no store.</span>
 				</label>
 				<label class="field">

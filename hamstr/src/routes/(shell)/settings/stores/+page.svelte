@@ -26,7 +26,7 @@
 <div class="page-head">
 	<div>
 		<h1>Stores</h1>
-		<p class="dim">Hosted AppCrumb catalogs this Hamstr can get apps from. Only the active one is browsed and used for Get and updates.</p>
+		<p class="dim">Catalogs this Hamstr can get apps from. Most installs keep the public AppCrumb active; only switch if you need another catalog.</p>
 	</div>
 	<div class="head-actions"><button class="button" type="button" onclick={() => (editing = {})}>Add a store</button></div>
 </div>
@@ -55,7 +55,7 @@
 {:else}
 	<div class="empty">
 		<h2>No store registered</h2>
-		<p>Add a hosted AppCrumb URL to browse and install apps. The environment’s <span class="mono">HAMSTR_STORE</span> only seeds the first entry on a fresh install.</p>
+		<p>Add <span class="mono">https://appcrumb.store</span> (or another catalog). Fresh installs seed that automatically from <span class="mono">HAMSTR_STORE</span>.</p>
 	</div>
 {/if}
 

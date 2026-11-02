@@ -53,7 +53,7 @@ The `OIDC_*` variables seed the first provider on a fresh install and are ignore
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HAMSTR_STORE` | — | Seeds the first store on a fresh install. Afterwards admins manage stores under Settings → Stores. Empty means no seed. |
+| `HAMSTR_STORE` | `https://appcrumb.store` | Seeds the first store on a fresh install. Afterwards admins manage stores under Settings → Stores. |
 | `HAMSTR_STORE_PUBLIC` | `HAMSTR_STORE` | Public/link URL for that seed entry. |
 | `HAMSTR_PROXY_TOKEN` | generated | Appliance internal: proves a crumb request came through Hamstr. Do not set by hand. |
 

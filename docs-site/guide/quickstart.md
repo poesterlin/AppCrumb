@@ -35,7 +35,7 @@ If you do not want sign-in or HTTPS, this is the whole thing:
 name: hamstr
 services:
   hamstr:
-    image: ghcr.io/poesterlin/celld-sites-appliance:0.3.2
+    image: ghcr.io/poesterlin/celld-sites-appliance:0.3.4
     container_name: hamstr
     restart: unless-stopped
     init: true
@@ -43,7 +43,7 @@ services:
     environment:
       - HAMSTR_AUTH=none
       - HAMSTR_CRUMB_PORTS=20000-20999
-      - HAMSTR_STORE=https://store.hamstr.app
+      - HAMSTR_STORE=https://appcrumb.store
     volumes:
       - hamstr-data:/data
     ports:
@@ -69,9 +69,10 @@ HTTP, one port per app. [Full instructions](/install/home-assistant).
 
 ## 3. The compose stack
 
-If you already run Traefik and want the full platform — a dashboard, the store, the moderation site, the demo node and
+If you already run Traefik and want the full platform — a dashboard, optional local store/moderation, the demo node and
 the tools to deploy sites — use the `compose.yaml` in this repository instead of the appliance. It builds the images
-locally and is meant for developing or operating this project, not for a first install.
+locally and is meant for developing or operating this project, not for a first install. Most people only need Hamstr
+pointed at [appcrumb.store](https://appcrumb.store).
 
 ```sh
 cp .env.example .env     # fill in random values
@@ -88,8 +89,7 @@ The stack and the appliance are two ways to run the same code. Do not run both a
 ## After the first start
 
 1. **Open Hamstr.** If sign-in is on, the first person to sign in becomes the owner.
-2. **Set the store.** Without a store there is nothing to install. `https://store.hamstr.app` is the default; any
-   compatible store works.
+2. **Store.** Fresh installs use [AppCrumb](https://appcrumb.store) by default. Change it under Settings → Stores only if you need another catalog.
 3. **Get an app** on the *Store* page. An admin's **Get** puts it on everyone's home screen at once.
 4. **Make a crumb.** Tap the app, then **New**.
 

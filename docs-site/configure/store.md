@@ -1,20 +1,20 @@
 # Apps and the store
 
-Hamstr ships with no apps. They come from a **store**, and you point your install at one.
+Hamstr ships with no apps. They come from **[AppCrumb](https://appcrumb.store)**, the public catalog. Most installs use that and never run a store themselves.
 
 ## Point at a store
 
-Admins register hosted store URLs under **Settings → Stores**. Only one is **active** at a time: the Store page, Get, and updates use that catalog. You can keep several registered and switch which one is active without restarting.
+Fresh installs seed **Settings → Stores** with `https://appcrumb.store`. Admins can register other URLs there; only one is **active** at a time (browse, Get, and updates use that catalog).
 
 ```yaml
 environment:
-  - HAMSTR_STORE=https://store.hamstr.app
+  - HAMSTR_STORE=https://appcrumb.store
 ```
 
-- `HAMSTR_STORE` / `HAMSTR_STORE_PUBLIC` seed the first entry on a fresh install. After that, Settings owns the list (add, edit, remove, and which is active).
+- `HAMSTR_STORE` / `HAMSTR_STORE_PUBLIC` seed the first entry on a fresh install (default `https://appcrumb.store`). After that, Settings owns the list.
 - Empty Settings list and no seed means no store: the store page explains that none is configured, and nothing can be installed.
-- `HAMSTR_STORE_PUBLIC` is the seed’s public/link URL (defaults to `HAMSTR_STORE`). Each registered store can set its own.
-- In the Home Assistant add-on, the **App store** option is that initial seed.
+- `HAMSTR_STORE_PUBLIC` is the seed’s public/link URL (defaults to `HAMSTR_STORE`).
+- The Home Assistant add-on uses the same default; change catalogs under Settings → Stores.
 
 A store only serves metadata and bundles. It never runs app code, and it never sees the data in your crumbs.
 
@@ -68,28 +68,23 @@ hostnames; only `https:` on port 443, no IP literals, no redirects out of the al
 Changing the allowlist clears the app's cache and aborts its running objects, so a long-lived object cannot keep using
 the old list.
 
-## Running your own store
+## Running your own store (uncommon)
 
-A store is a separate service for people who publish apps. It holds:
+You do not need this for a personal Hamstr. Publishers use [appcrumb.store](https://appcrumb.store); Hamstr only
+downloads from a catalog. Running a store is for people who operate a catalog (or develop this project).
 
-- publisher accounts and namespaces;
-- apps and releases;
-- moderation state and the review queue.
-
-The compose stack in this repository runs one, with Postgres, a moderation site and a demo node:
+A store holds publisher accounts, apps and releases, and moderation. The compose stack in this repository can run one:
 
 ```sh
 COMPOSE_PROFILES=store
 ```
 
-It is LAN-only by default. Making it public is a Cloudflare tunnel entry plus `STORE_REQUIRE_REVIEW=1`, and it brings
-legal obligations (an Impressum and a privacy policy if you operate it from Germany). See the repository's
+It is LAN-only by default. Making it public needs a tunnel entry, `STORE_REQUIRE_REVIEW=1`, and brings legal
+obligations where you host it. See the repository's
 [store README](https://github.com/poesterlin/AppCrumb/tree/main/store), especially "Going public" and
 "Moderation".
 
-Review is a store setting, not a runtime property. A self-hosted store can run with `STORE_REQUIRE_REVIEW=0`, and then
-nobody looks at a release before it is listed. The official store's moderation does not extend to it. Neither setting
-makes an app safe to run.
+A self-hosted store with review off is not covered by AppCrumb's moderation. Neither setting makes an app safe to run.
 
 Do not confuse the two roles:
 
@@ -98,7 +93,7 @@ Do not confuse the two roles:
 | Runs app code | yes | no |
 | Holds crumb data | yes | no |
 | Needs an account | for its people | for publishers only |
-| Public by default | no | no |
+| Usual role | get apps | the public catalog at appcrumb.store |
 
 ## What is out of scope
 

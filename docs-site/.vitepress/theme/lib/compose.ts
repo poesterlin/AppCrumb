@@ -184,7 +184,7 @@ export function defaultOptions(): Options {
 		oidcIssuer: "",
 		oidcClientId: "",
 		oidcClientSecret: "",
-		storeUrl: "https://store.hamstr.app",
+		storeUrl: "https://appcrumb.store",
 		memLimit: "",
 		cpus: "",
 		timezone: "",

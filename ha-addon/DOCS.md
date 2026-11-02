@@ -17,8 +17,9 @@ Hamstr opens in its own tab, on this box's address, for example
 
 ## Get apps
 
-Apps come from AppCrumb. Set its address in the **App store** option,
-then restart the add-on.
+Apps come from [AppCrumb](https://appcrumb.store). Fresh installs use that
+catalog automatically. To point at another store, open Hamstr → **Settings →
+Stores** (no add-on restart).
 
 ## Home mode
 

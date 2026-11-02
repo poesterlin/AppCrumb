@@ -1,0 +1,30 @@
+# Public-VM overlay: join the existing w3-proxy Traefik network.
+# The Compose network key stays `traefik_web` (compose.yaml), but the real
+# Docker network name is `w3-proxy`. Traefik's `traefik.docker.network` label
+# looks up by Docker name — leaving it as `traefik_web` makes Traefik fall
+# back to a random container network (often celld-sites_default, which it
+# cannot reach), causing intermittent public 504s/stalls.
+networks:
+  traefik_web:
+    external: true
+    name: w3-proxy
+
+services:
+  celld:
+    labels:
+      - traefik.docker.network=w3-proxy
+  store:
+    labels:
+      - traefik.docker.network=w3-proxy
+  moderation:
+    labels:
+      - traefik.docker.network=w3-proxy
+  celld-demo:
+    labels:
+      - traefik.docker.network=w3-proxy
+  dashboard:
+    labels:
+      - traefik.docker.network=w3-proxy
+  hamstr:
+    labels:
+      - traefik.docker.network=w3-proxy

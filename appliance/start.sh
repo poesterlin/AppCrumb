@@ -112,8 +112,9 @@ fi
 : "${HAMSTR_HOST:?Set HAMSTR_HOST (the Hamstr hostname)}"
 : "${HAMSTR_CRUMB_DOMAIN:?Set HAMSTR_CRUMB_DOMAIN (crumbs are crumb-<id>.<this>)}"
 export HAMSTR_SCHEME="${HAMSTR_SCHEME:-https}"
-# No store unless one is set: Hamstr's own default is the compose stack's.
-export HAMSTR_STORE="${HAMSTR_STORE:-}"
+# Seeds Settings → Stores on a fresh data dir; afterwards admins manage catalogs in Hamstr.
+export HAMSTR_STORE="${HAMSTR_STORE:-https://appcrumb.store}"
+export HAMSTR_STORE_PUBLIC="${HAMSTR_STORE_PUBLIC:-$HAMSTR_STORE}"
 case "$HAMSTR_HOST" in "$ADMIN_HOST") log "HAMSTR_HOST must not be $ADMIN_HOST"; exit 1 ;; esac
 
 # --- celld node -------------------------------------------------------------

@@ -65,7 +65,7 @@ Release: tag `vX.Y.Z`, then set `version` in `ha-addon/config.yaml` to it.
 | `HAMSTR_HOST`, `HAMSTR_CRUMB_DOMAIN` | the TLS hostname | The shell, and the domain crumbs live under (`crumb-<id>.<domain>`). Required with `TLS_MODE=off` |
 | `HAMSTR_SCHEME` | `https` | `http` only for tests |
 | `OIDC_NAME`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | — | The first sign-in provider (afterwards: Settings → Sign-in). The issuer must be HTTPS. Redirect URI: `https://<HAMSTR_HOST>/auth/callback/<name in lowercase>` |
-| `HAMSTR_STORE`, `HAMSTR_STORE_PUBLIC` | — | Seeds the first AppCrumb URL; Settings → Stores manages the list after that |
+| `HAMSTR_STORE`, `HAMSTR_STORE_PUBLIC` | `https://appcrumb.store` | Seeds the first AppCrumb URL; Settings → Stores manages the list after that |
 | `SITE_*`, `CELLD_V8_HEAP_LIMIT_MB`, `CELLD_LTX_RETENTION_SECS`, `S3_FSYNC` | as in the compose stack | See `.env.example` in the project root |
 
 With TLS, the install's name is the shell (`https://k3x9.hamstr.app`), crumbs

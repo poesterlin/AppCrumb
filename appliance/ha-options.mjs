@@ -17,7 +17,6 @@ const map = {
 	oidc_issuer: "OIDC_ISSUER",
 	oidc_client_id: "OIDC_CLIENT_ID",
 	oidc_client_secret: "OIDC_CLIENT_SECRET",
-	store: "HAMSTR_STORE",
 };
 const quote = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const out = [];
@@ -26,7 +25,8 @@ for (const [key, name] of Object.entries(map)) {
 	if (value !== undefined && value !== null && value !== "") out.push(`export ${name}=${quote(value)}`);
 }
 // "NAME=value" entries: the DNS provider's credentials (`lego dnshelp`) and
-// anything else the appliance reads.
+// anything else the appliance reads. Prefer Settings → Stores in Hamstr for
+// catalogs; HAMSTR_STORE in env only seeds a fresh install.
 for (const entry of options.env ?? []) {
 	const m = /^([A-Z_][A-Z0-9_]*)=(.*)$/s.exec(entry);
 	if (!m) {
@@ -35,5 +35,4 @@ for (const entry of options.env ?? []) {
 	}
 	out.push(`export ${m[1]}=${quote(m[2])}`);
 }
-if (options.store && !options.store_public) out.push(`export HAMSTR_STORE_PUBLIC=${quote(options.store)}`);
 console.log(out.join("\n"));

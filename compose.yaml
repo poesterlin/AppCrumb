@@ -473,10 +473,10 @@ services:
       HAMSTR_HOST: ${HAMSTR_HOST:-hamstr.example.com}
       HAMSTR_CRUMB_DOMAIN: ${HAMSTR_CRUMB_DOMAIN:-example.com}
       HAMSTR_SCHEME: https
-      # The AppCrumb instance it gets apps from: the one in this stack by default, or
-      # any other (HAMSTR_STORE=https://store.hamstr.app in .env).
-      HAMSTR_STORE: ${HAMSTR_STORE:-http://store:3000}
-      HAMSTR_STORE_PUBLIC: ${HAMSTR_STORE_PUBLIC:-https://${STORE_HOST:-store.example.com}}
+      # Public AppCrumb by default. Point at this stack's store with
+      # HAMSTR_STORE=http://store:3000 when developing against a local catalog.
+      HAMSTR_STORE: ${HAMSTR_STORE:-https://appcrumb.store}
+      HAMSTR_STORE_PUBLIC: ${HAMSTR_STORE_PUBLIC:-https://appcrumb.store}
       CELLD_ADMIN_API: http://admin.internal:8080
       ADMIN_HOST: admin.internal
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
