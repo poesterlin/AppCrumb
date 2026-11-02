@@ -65,8 +65,8 @@
 	<section class="home-hero" aria-label="Welcome">
 		<div class="hero-copy">
 			<p class="hero-kicker">Tiny apps. Big ideas.</p>
-			<h1>Small apps for a brighter day.</h1>
-			<p class="hero-lead">Discover useful little apps built by real people. They run on your own Hamstr — data stays home.</p>
+			<h1>The new self-hosting primitive.</h1>
+			<p class="hero-lead">Apps that just do the thing. No ads, no logins, no upsells — open it, use it, close it.</p>
 			<div class="hero-actions">
 				<button type="button" class="button" onclick={browseApps}>Browse apps →</button>
 				<a class="button ghost" href="/about">How it works</a>
