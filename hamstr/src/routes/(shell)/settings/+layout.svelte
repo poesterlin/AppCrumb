@@ -6,6 +6,7 @@
 		{ href: "/settings/people", label: data.pending ? `People (${data.pending})` : "People" },
 		{ href: "/settings/groups", label: "Groups" },
 		{ href: "/settings/sites", label: "Sites" },
+		{ href: "/settings/stores", label: "Stores" },
 		{ href: "/settings/sign-in", label: "Sign-in" },
 		{ href: "/settings/activity", label: "Activity" },
 	]);

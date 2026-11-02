@@ -691,3 +691,92 @@ describe("trash and updates", () => {
 		assert.equal((await apiCall(ada, "DELETE", "/api/apps/fetcher?items=delete")).status, 200);
 	});
 });
+
+describe("stores settings", () => {
+	it("seeds HAMSTR_STORE, lets an admin register and switch the active one, and refuses members", async () => {
+		const ada = await signIn(ADA);
+		const bob = await signIn(BOB);
+		const listed = await apiCall(ada, "GET", "/api/admin/stores");
+		assert.equal(listed.status, 200, listed.text);
+		assert.equal(listed.json.stores.length, 1);
+		assert.equal(listed.json.stores[0].url, storeBase);
+		assert.equal(listed.json.stores[0].active, true);
+		assert.equal((await apiCall(bob, "GET", "/api/admin/stores")).status, 403);
+
+		const other = createStore({ dataDir: join(dir, "store-other"), rateLimit: false, logging: false });
+		const otherBase = `http://127.0.0.1:${(await other.listen(0, "127.0.0.1")).port}`;
+		try {
+			const created = await apiCall(ada, "POST", "/api/admin/stores", { url: otherBase, name: "Other" });
+			assert.equal(created.status, 200, created.text);
+			assert.equal(created.json.store.url, otherBase);
+			assert.equal(created.json.store.active, false);
+			assert.equal(hamstr.core.activeStore().url, storeBase);
+
+			const activated = await apiCall(ada, "PATCH", `/api/admin/stores/${created.json.store.id}`, { active: true });
+			assert.equal(activated.status, 200, activated.text);
+			assert.equal(hamstr.core.activeStore().url, otherBase);
+			assert.equal(hamstr.core.storesList().filter((s) => s.active).length, 1);
+
+			// Market calls follow the active store (empty other catalog).
+			const market = await apiCall(ada, "GET", "/api/market?limit=5");
+			assert.equal(market.status, 200, market.text);
+			assert.equal(market.json.apps?.length ?? 0, 0);
+
+			assert.equal((await apiCall(ada, "DELETE", `/api/admin/stores/${created.json.store.id}`)).status, 200);
+			assert.equal(hamstr.core.activeStore().url, storeBase);
+			const back = await apiCall(ada, "GET", "/api/market?limit=5");
+			assert.ok((back.json.apps?.length ?? 0) > 0, back.text);
+		} finally {
+			await other.close();
+			const left = hamstr.core.storesList();
+			if (!left.some((s) => s.url === storeBase)) {
+				hamstr.core.saveStore("test", { url: storeBase, active: true });
+			} else if (!hamstr.core.activeStore() || hamstr.core.activeStore().url !== storeBase) {
+				hamstr.core.activateStore("test", left.find((s) => s.url === storeBase).id);
+			}
+			for (const s of hamstr.core.storesList()) {
+				if (s.url !== storeBase) hamstr.core.deleteStore("test", s.id);
+			}
+		}
+	});
+
+	it("seeds only once, and an empty list means no store", async () => {
+		const dataDir = join(dir, "hamstr-stores-seed");
+		const opts = {
+			dataDir,
+			shellHost: SHELL,
+			crumbDomain: "crumbs.test",
+			scheme: "http",
+			celldApi: celld.api,
+			adminToken: celld.adminToken,
+			proxyToken: celld.proxyToken,
+			secret: "test-secret-stores",
+			oidc: { issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret },
+			logging: false,
+		};
+		const a = createHamstr({ ...opts, store: storeBase, storePublic: `${storeBase}/public` });
+		await a.listen(0, "127.0.0.1");
+		try {
+			const first = a.core.storesList();
+			assert.equal(first.length, 1);
+			assert.equal(first[0].url, storeBase);
+			assert.equal(first[0].publicUrl, `${storeBase}/public`);
+			a.core.saveStore("test", { id: first[0].id, url: storeBase, name: "Renamed" });
+		} finally {
+			await a.close();
+		}
+		const b = createHamstr({ ...opts, store: "http://ignored.example" });
+		await b.listen(0, "127.0.0.1");
+		try {
+			const again = b.core.storesList();
+			assert.equal(again.length, 1);
+			assert.equal(again[0].name, "Renamed");
+			assert.equal(again[0].url, storeBase);
+			b.core.deleteStore("test", again[0].id);
+			assert.equal(b.core.activeStore(), null);
+			await assert.rejects(() => b.core.storeJson("/api/v1/apps?limit=1"), (err) => err.status === 503 && /Settings → Stores/.test(err.message));
+		} finally {
+			await b.close();
+		}
+	});
+});

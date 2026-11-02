@@ -4,15 +4,17 @@ Hamstr ships with no apps. They come from a **store**, and you point your instal
 
 ## Point at a store
 
+Admins register hosted store URLs under **Settings → Stores**. Only one is **active** at a time: the Store page, Get, and updates use that catalog. You can keep several registered and switch which one is active without restarting.
+
 ```yaml
 environment:
   - HAMSTR_STORE=https://store.hamstr.app
 ```
 
-- Empty means no store: the store page explains that none is configured, and nothing can be installed.
-- `HAMSTR_STORE_PUBLIC` is the URL used for links (defaults to `HAMSTR_STORE`).
-- In the Home Assistant add-on, this is the **App store** option.
-- Restart the container after changing it.
+- `HAMSTR_STORE` / `HAMSTR_STORE_PUBLIC` seed the first entry on a fresh install. After that, Settings owns the list (add, edit, remove, and which is active).
+- Empty Settings list and no seed means no store: the store page explains that none is configured, and nothing can be installed.
+- `HAMSTR_STORE_PUBLIC` is the seed’s public/link URL (defaults to `HAMSTR_STORE`). Each registered store can set its own.
+- In the Home Assistant add-on, the **App store** option is that initial seed.
 
 A store only serves metadata and bundles. It never runs app code, and it never sees the data in your crumbs.
 

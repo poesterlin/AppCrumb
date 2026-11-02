@@ -37,6 +37,11 @@ export function accountsApi(access: Access | undefined, handler: (event, user, a
 	});
 }
 
+/** Admin JSON route over the Hamstr core: `handler(event, user, core)`. */
+export function adminApi(handler: (event, user, core) => unknown) {
+	return accountsApi({ admin: true }, (event, user) => handler(event, user, event.locals.core));
+}
+
 export const body = (event) => readJson(event.request);
 
 /** A redirect anywhere (SvelteKit's redirect() refuses other origins), with cookies. */

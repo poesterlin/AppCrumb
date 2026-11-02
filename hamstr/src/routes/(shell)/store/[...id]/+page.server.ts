@@ -27,6 +27,6 @@ export async function load({ locals, params }) {
 		installed,
 		detail,
 		error,
-		storePublic: c.config.storePublic,
+		storePublic: c.activeStore()?.publicUrl ?? "",
 	};
 }

@@ -5,6 +5,6 @@ export const GET = guard(async (event) => {
 	const me = requireUser(event);
 	return json(c, 200, {
 		user: { id: me.id, name: me.name, email: me.email, admin: c.isAdmin(me) },
-		config: { name: c.NAME, crumbDomain: c.config.crumbDomain, storePublic: c.config.storePublic }
+		config: { name: c.NAME, crumbDomain: c.config.crumbDomain, storePublic: c.activeStore()?.publicUrl ?? "" }
 	});
 });

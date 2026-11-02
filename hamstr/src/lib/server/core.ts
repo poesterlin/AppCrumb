@@ -12,6 +12,7 @@ import { CelldError, createCelld, downloadBundle } from "../../../lib/celld.ts";
 import { AuthError, createCore as createAccounts } from "../../../lib/auth/core.ts";
 import { safePath } from "../../../lib/path.ts";
 import { siteOf } from "../../../lib/site.ts";
+import { createStores, ensureStores } from "../../../lib/stores.ts";
 
 export { AuthError, CelldError, ManifestError, BundleError, safePath };
 
@@ -254,6 +255,9 @@ export function createCore(options: CoreOptions = {}) {
 	// Store apps are <publisher>/<app>: remember which one each installed app
 	// is, so an update can never swap in someone else's app of the same name.
 	if (!db.prepare("SELECT 1 FROM pragma_table_info('apps') WHERE name = 'store_id'").get()) db.exec("ALTER TABLE apps ADD COLUMN store_id TEXT");
+	// Registered AppCrumb URLs. One is active; browse/install/update use that one.
+	// HAMSTR_STORE seeds the first row on a fresh data directory; Settings owns the list after that.
+	ensureStores(db, { url: config.store, publicUrl: config.storePublic || config.store }, randomId, now);
 	// --- accounts ---------------------------------------------------------------------
 	// People, groups, sign-in providers, invites and sessions live in their own
 	// database (lib/auth); this one keeps a users row per person for the crumbs.
@@ -267,6 +271,7 @@ export function createCore(options: CoreOptions = {}) {
 		hideSite: (site) => site.startsWith(config.crumbPrefix),
 	});
 	const seeded = seedAccounts();
+	const stores = createStores({ db, randomId, now, audit: accounts.audit, HttpError });
 
 	/** A fresh install gets the OIDC provider from the environment, and everyone
 	 *  who signed in before accounts existed is brought over (see importLegacyPeople).
@@ -404,11 +409,18 @@ export function createCore(options: CoreOptions = {}) {
 	}
 
 	// --- store ---------------------------------------------------------------------
+	const storesList = () => stores.list();
+	const activeStore = () => stores.active();
+	const activateStore = (actor: string, id: string) => stores.activate(actor, id);
+	const saveStore = (actor: string, input: Parameters<typeof stores.save>[1]) => stores.save(actor, input);
+	const deleteStore = (actor: string, id: string) => stores.remove(actor, id);
+
 	async function storeJson(path) {
-		if (!config.store) throw new HttpError(503, "no app store is set up: set HAMSTR_STORE (in the Home Assistant add-on: the App store option)");
+		const store = activeStore();
+		if (!store) throw new HttpError(503, "no app store is set up: an admin can add one under Settings → Stores");
 		let res;
 		try {
-			res = await fetch(`${config.store}${path}`, { signal: AbortSignal.timeout(30_000) });
+			res = await fetch(`${store.url}${path}`, { signal: AbortSignal.timeout(30_000) });
 		} catch {
 			throw new HttpError(502, "the app store is unreachable");
 		}
@@ -479,7 +491,9 @@ export function createCore(options: CoreOptions = {}) {
 			if (newDevices.length && !allowEgress) {
 				throw new HttpError(403, `${manifest.name} wants to use the ${newDevices.join(", ")}; review and allow it first`);
 			}
-			const { file, sha } = await downloadBundle(config.store, storeId, release.version, release.bundleSha256, tmpDir);
+			const origin = activeStore();
+			if (!origin) throw new HttpError(503, "no app store is set up: an admin can add one under Settings → Stores");
+			const { file, sha } = await downloadBundle(origin.url, storeId, release.version, release.bundleSha256, tmpDir);
 			let uploaded;
 			try {
 				uploaded = await celld.upload(file, { egress: newEgress, probeHost: `${config.crumbPrefix}probe-${randomId(8)}.${config.crumbDomain}` });
@@ -835,7 +849,7 @@ export function createCore(options: CoreOptions = {}) {
 	const timer = setInterval(() => housekeeping().catch((err) => console.error("hamstr: housekeeping failed", err)), 10 * 60 * 1000);
 	timer.unref();
 	// Apps installed before namespaces learn their <publisher>/<app> from the store.
-	if (config.store) setTimeout(() => backfillStoreIds().catch(() => {}), 2000).unref();
+	if (activeStore()) setTimeout(() => backfillStoreIds().catch(() => {}), 2000).unref();
 
 	return {
 		NAME,
@@ -886,6 +900,11 @@ export function createCore(options: CoreOptions = {}) {
 		accessFor,
 		appJson,
 		crumbJson,
+		storesList,
+		activeStore,
+		saveStore,
+		activateStore,
+		deleteStore,
 		storeJson,
 		storePath,
 		install,
