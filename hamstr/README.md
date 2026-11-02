@@ -5,6 +5,8 @@
 Hamstr is a personal app platform in the spirit of [Sandstorm](https://sandstorm.io),
 built on a celld-sites node. A hamster hoards *crumbs*; so does Hamstr.
 
+Install and use it with the [manual](https://docs.appcrumb.store).
+
 - **Apps** come from the [AppCrumb](../store/README.md). Developers publish
   with the `hamstr` CLI; everyone else only uses the web UI. *Home* is a
   launcher: every installed app is an icon there. An admin's *Get* in the store
@@ -122,7 +124,7 @@ Notes:
 - A crumb may set cookies for itself; cookies with a `Domain` attribute are
   dropped (they would reach other crumbs and other services).
 - Don't rely on a `Referer` or on being top-level: crumbs run in the shell's
-  iframe (`frame-ancestors` is the shell only) and also open in their own tab.
+  iframe (`frame-ancestors` is the shell, or `*` in home mode) and also open in their own tab.
 
 See `store/test/fixtures/pinboard` for a complete app that uses all of this.
 

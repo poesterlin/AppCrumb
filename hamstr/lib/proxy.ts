@@ -17,6 +17,13 @@ function shellOriginFor(core, event) {
 	return `http://${hostname}${core.config.publicPort ? `:${core.config.publicPort}` : ""}`;
 }
 
+/** Who may embed this crumb. Home mode matches the shell (`*`): Hamstr is often
+ *  itself framed by the Home Assistant panel, and frame-ancestors must allow
+ *  every ancestor — listing only the shell blocks the nested crumb iframe. */
+function frameAncestorsFor(core, shellOrigin) {
+	return core.home ? "*" : shellOrigin;
+}
+
 /** The crumb's own origin. In home mode, the host and port the browser used. */
 const crumbOriginFor = (core, event, crumb) => (core.home ? `http://${event.locals.browserHost}` : core.crumbOrigin(crumb.id));
 
@@ -32,7 +39,7 @@ a{color:#5452e8}@media(prefers-color-scheme:dark){body{color:#f4f4f6;background:
 			headers: {
 				"content-type": "text/html; charset=utf-8",
 				"cache-control": "no-store",
-				"content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; frame-ancestors ${shellOrigin}`,
+				"content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; frame-ancestors ${frameAncestorsFor(core, shellOrigin)}`,
 				"x-content-type-options": "nosniff",
 			},
 		},
@@ -46,8 +53,9 @@ a{color:#5452e8}@media(prefers-color-scheme:dark){body{color:#f4f4f6;background:
  *  script that changed after review, or send what people type anywhere. Inline
  *  and eval'd scripts stay allowed: frameworks need them, and they can only
  *  come from the reviewed bundle. Subdomains of a declared host count, for the
- *  media servers of a service like Mastodon. */
-export function crumbPolicy(egress: string[], shellOrigin: string): string {
+ *  media servers of a service like Mastodon. `ancestors` is the frame-ancestors
+ *  value (the shell origin, or `*` in home mode). */
+export function crumbPolicy(egress: string[], ancestors: string): string {
 	const hosts = egress.flatMap((h) => [`https://${h}`, `https://*.${h}`, `wss://${h}`]).join(" ");
 	const plus = (list: string) => (hosts ? `${list} ${hosts}` : list);
 	return [
@@ -63,7 +71,7 @@ export function crumbPolicy(egress: string[], shellOrigin: string): string {
 		"object-src 'none'",
 		"base-uri 'self'",
 		plus("form-action 'self'"),
-		`frame-ancestors ${shellOrigin}`,
+		`frame-ancestors ${ancestors}`,
 	].join("; ");
 }
 
@@ -176,7 +184,7 @@ function responseHeaders(core, up, egress: string[], shellOrigin: string): Heade
 	}
 	// Two policies: the app's own (if any) and ours; the browser enforces both.
 	const policy = out.get("content-security-policy");
-	out.set("content-security-policy", [...(policy === null ? [] : [policy]), crumbPolicy(egress, shellOrigin)].join(", "));
+	out.set("content-security-policy", [...(policy === null ? [] : [policy]), crumbPolicy(egress, frameAncestorsFor(core, shellOrigin))].join(", "));
 	out.set("x-robots-tag", "noindex");
 	return out;
 }

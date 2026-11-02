@@ -97,7 +97,7 @@ describe("home mode", () => {
 		assert.equal(other, `http://192.168.1.5:${FIRST_PORT + 1}/`);
 	});
 
-	it("proxies a crumb port to its crumb, as the owner, framed by the shell only", async () => {
+	it("proxies a crumb port to its crumb, as the owner, and allows nesting under the HA panel", async () => {
 		const r = await onCrumb(FIRST_PORT, "GET", "/list?x=1", { "x-hamstr-role": "forged" });
 		assert.equal(r.status, 200, r.text);
 		const h = r.json.headers;
@@ -105,7 +105,8 @@ describe("home mode", () => {
 		assert.equal(h["x-hamstr-role"], "owner");
 		assert.equal(decodeURIComponent(h["x-hamstr-username"]), "Owner");
 		assert.match(h["x-hamstr-session-id"], /^[a-f0-9]{16}$/);
-		assert.match(r.headers["content-security-policy"], /connect-src 'self'; .*frame-ancestors http:\/\/homeassistant\.local:8000$/);
+		// `*`: Hamstr itself may be framed by Home Assistant; ancestors must all be allowed.
+		assert.match(r.headers["content-security-policy"], /connect-src 'self'; .*frame-ancestors \*$/);
 		assert.equal((await onCrumb(FIRST_PORT + 1, "GET", "/")).json.host, `crumb-${notes.id}.crumbs.internal`);
 	});
 

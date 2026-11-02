@@ -68,7 +68,7 @@ old allowlist.
 - The crumb proxy strips `X-Hamstr-*` from the browser and adds them itself. A crumb can trust those headers only
   because celld refuses requests to `crumb-*` sites without `PROXY_TOKEN`.
 - Cookies with a `Domain` attribute are dropped, so one crumb cannot set a cookie for another.
-- A crumb runs inside the shell's iframe (`frame-ancestors` is the shell) and can also open in its own tab.
+- A crumb runs inside the shell's iframe (`frame-ancestors` is the shell, or `*` in home mode so a Home Assistant panel can nest it) and can also open in its own tab.
 
 ## The control plane
 

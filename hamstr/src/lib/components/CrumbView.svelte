@@ -61,8 +61,8 @@
 	}
 
 	function onFrameLoad() {
-		// Cross-origin crumb: reading location throws ⇒ real page. about:blank /
-		// browser error pages are often readable ⇒ keep waiting for the timeout.
+		// Cross-origin crumb: reading location throws ⇒ real page. Browser error /
+		// frame-ancestors interstitial pages are often readable ⇒ treat as failed.
 		let href = "";
 		try {
 			href = frameEl?.contentWindow?.location?.href ?? "";
@@ -70,7 +70,11 @@
 			markReady();
 			return;
 		}
-		if (!href || href === "about:blank" || href.startsWith("chrome-error://") || href.includes("chromewebdata")) return;
+		if (!href || href === "about:blank") return;
+		if (href.startsWith("chrome-error://") || href.includes("chromewebdata") || href.startsWith("chrome://")) {
+			markFailed();
+			return;
+		}
 		markReady();
 	}
 
