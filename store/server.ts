@@ -225,20 +225,24 @@ export function createStore(options: StoreOptions = {}) {
 	// The app shell (index.html) starts SvelteKit with one inline script; the CSP
 	// allows exactly that script by its hash. Read once, on first use.
 	let shell;
-	const appShell = () => {
-		if (shell !== undefined) return shell;
-		const file = join(webDir, "index.html");
-		if (!existsSync(file)) return (shell = null);
-		let html = readFileSync(file, "utf8");
-		// The CDN gives static files a long browser TTL, so a deploy that only
-		// changes /store.css would stay stale in visitors' browsers. index.html
-		// is no-cache: version the non-hashed links by their build mtime here.
-		for (const rel of ["/ui.css", "/store.css", "/crumb.svg"]) {
+	// The CDN gives static files a long browser TTL, so a deploy that only
+	// changes /store.css would stay stale in visitors' browsers. The app shell
+	// and the legal pages are served no-cache: version their non-hashed links by
+	// the build's mtime here.
+	const versionLinks = (html: string) => {
+		for (const rel of ["/ui.css", "/store.css", "/crumb.svg", "/favicon.svg"]) {
 			const asset = join(webDir, rel);
 			if (!existsSync(asset)) continue;
 			const version = statSync(asset).mtimeMs.toString(36);
 			html = html.replaceAll(`"${rel}"`, `"${rel}?v=${version}"`);
 		}
+		return html;
+	};
+	const appShell = () => {
+		if (shell !== undefined) return shell;
+		const file = join(webDir, "index.html");
+		if (!existsSync(file)) return (shell = null);
+		let html = versionLinks(readFileSync(file, "utf8"));
 		const body = Buffer.from(html);
 		const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 			(m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`,
@@ -712,7 +716,7 @@ export function createStore(options: StoreOptions = {}) {
 	const legalFile = (path: string) => (config.legalDir && LEGAL_PAGES[path] ? join(config.legalDir, LEGAL_PAGES[path]) : null);
 	function legalPage(path: string): Buffer | null {
 		const file = legalFile(path);
-		return file && existsSync(file) ? readFileSync(file) : null;
+		return file && existsSync(file) ? Buffer.from(versionLinks(readFileSync(file, "utf8"))) : null;
 	}
 	/** Footer links: a configured URL, else the page this store serves, else none. */
 	const legalLinks = () => ({
