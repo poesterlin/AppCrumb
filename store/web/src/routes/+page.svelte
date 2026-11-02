@@ -66,7 +66,7 @@
 		<div class="hero-copy">
 			<p class="hero-kicker">Tiny apps. Big ideas.</p>
 			<h1>The new self-hosting primitive.</h1>
-			<p class="hero-lead">Apps that just do the thing. No ads, no logins, no upsells — open it, use it, close it.</p>
+			<p class="hero-lead">Apps that just do the thing. No ads, no logins, no upsells. Open it, use it, close it.</p>
 			<div class="hero-actions">
 				<button type="button" class="button" onclick={browseApps}>Browse apps →</button>
 				<a class="button ghost" href="/about">How it works</a>
