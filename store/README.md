@@ -11,7 +11,7 @@ store never runs app code, and the app's data never leaves the user's machine.
 The store is separate from the personal platform: people run Hamstr at home and
 never run a store. One store serves many Hamstrs. They share the design system
 ([`packages/ui`](../packages/ui)) and app validation ([`packages/app-format`](../packages/app-format)),
-while the store wears its own warm skin.
+while the store wears its own paper-and-ember skin.
 
 This directory is a working prototype: the catalog UI, publisher API, CLI and
 the demo apps all run, and the test suites cover the store, the bundle format
