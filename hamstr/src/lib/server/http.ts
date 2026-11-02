@@ -5,6 +5,10 @@ import { isHttpError, isRedirect } from "@sveltejs/kit";
 import { esc } from "../../../lib/html.ts";
 import { BundleError, CelldError, HttpError, ManifestError } from "./core.ts";
 
+/** Home mode may be framed by the Home Assistant sidebar (same scheme). Signed-in
+ *  installs stay unframeable so a foreign page cannot clickjack the shell. */
+export const frameAncestors = (core) => (core.home ? "*" : "'none'");
+
 /** The shell's CSP. SvelteKit appends its nonce to script-src for rendered
  *  pages; everything else gets this exact policy. */
 export function csp(core) {
@@ -17,7 +21,7 @@ export function csp(core) {
 		`frame-src ${core.crumbSources}`,
 		"base-uri 'none'",
 		"form-action 'self'",
-		"frame-ancestors 'none'",
+		`frame-ancestors ${frameAncestors(core)}`,
 	].join("; ");
 }
 
@@ -34,7 +38,7 @@ function shellHeaders(core, extra = {}) {
 		// Chromium sends `Origin: null` on form posts under no-referrer, which would
 		// defeat the same-origin checks below.
 		"referrer-policy": "same-origin",
-		"x-frame-options": "DENY",
+		...(core.home ? {} : { "x-frame-options": "DENY" }),
 		"content-security-policy": csp(core),
 		...extra,
 	};

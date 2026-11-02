@@ -8,12 +8,15 @@ Your data stays on this Home Assistant box.
 ## Start
 
 1. Start the add-on.
-2. Click **Hamstr** in the sidebar, then **Open Hamstr**.
+2. Click **Hamstr** in the sidebar.
 
 That's it. You are the owner.
 
-Hamstr opens in its own tab, on this box's address, for example
-`http://homeassistant.local:8000`. It cannot open inside Home Assistant.
+The sidebar tries to show Hamstr inside the panel when the browser allows it
+(Home Assistant and Hamstr on the same scheme — often both plain HTTP). If that
+is blocked (typical when Home Assistant is HTTPS and Hamstr is HTTP), use
+**Open Hamstr** to open it in its own tab on this box's address, for example
+`http://homeassistant.local:8000`.
 
 ## Get apps
 

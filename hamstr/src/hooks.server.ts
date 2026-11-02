@@ -4,7 +4,7 @@
 // Anything else is not ours. This hook routes on the Host header before
 // SvelteKit's router, and adds the shell's security headers to every answer.
 import { core } from "#lib/server/instance.ts";
-import { csp, cspExtras, json } from "#lib/server/http.ts";
+import { csp, cspExtras, frameAncestors, json } from "#lib/server/http.ts";
 import { crumbRequest } from "../lib/proxy.ts";
 
 const BODYLESS = new Set([101, 204, 205, 304]);
@@ -15,10 +15,19 @@ function withShellHeaders(c, response) {
 	// Chromium sends `Origin: null` on form posts under no-referrer, which would
 	// defeat the same-origin checks.
 	if (!headers.has("referrer-policy")) headers.set("referrer-policy", "same-origin");
-	headers.set("x-frame-options", "DENY");
+	if (c.home) headers.delete("x-frame-options");
+	else headers.set("x-frame-options", "DENY");
 	const existing = headers.get("content-security-policy");
 	if (!existing) headers.set("content-security-policy", csp(c));
-	else if (!existing.includes("frame-src")) headers.set("content-security-policy", `${existing}; ${cspExtras(c).join("; ")}`);
+	else {
+		let next = existing;
+		if (!next.includes("frame-src")) next = `${next}; ${cspExtras(c).join("; ")}`;
+		// kitOptions bakes frame-ancestors 'none' into rendered pages; home mode
+		// must allow the Home Assistant sidebar to frame the shell.
+		if (/frame-ancestors\s/.test(next)) next = next.replace(/frame-ancestors\s[^;]+/, `frame-ancestors ${frameAncestors(c)}`);
+		else next = `${next}; frame-ancestors ${frameAncestors(c)}`;
+		headers.set("content-security-policy", next);
+	}
 	return new Response(BODYLESS.has(response.status) ? null : response.body, {
 		status: response.status,
 		statusText: response.statusText,

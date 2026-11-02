@@ -9,13 +9,13 @@ each.
 2. **⋮** (top right) → **Repositories**.
 3. Add `https://github.com/poesterlin/AppCrumb` and close.
 4. Install **Hamstr**, then **Start**.
-5. Click **Hamstr** in the sidebar, then **Open Hamstr**.
+5. Click **Hamstr** in the sidebar.
 
 That is the whole setup in home mode: you are the owner, and there is no sign-in.
 
-The panel is a small page with links to Hamstr on the box's own addresses (`homeassistant.local`, its IPs, or the TLS
-hostname). Hamstr cannot open *inside* the panel: home mode is plain HTTP and Home Assistant's page is HTTPS, so the
-panel opens a new tab instead.
+The panel tries to show Hamstr inside the sidebar when the browser allows it (same scheme — often both plain HTTP).
+If Home Assistant is HTTPS and Hamstr is HTTP, the browser blocks that; use **Open Hamstr** for a new tab on the box's
+own address (`homeassistant.local`, an IP, or Tailscale).
 
 ## Home mode is the default
 

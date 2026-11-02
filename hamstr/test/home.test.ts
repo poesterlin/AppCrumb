@@ -78,6 +78,12 @@ describe("home mode", () => {
 		assert.equal(hamstr.core.accounts.people().length, 1, "one owner, made once");
 	});
 
+	it("allows the Home Assistant sidebar to frame the shell", async () => {
+		const page = await shell.request("GET", "/", { host: SHELL });
+		assert.match(page.headers["content-security-policy"], /frame-ancestors \*/);
+		assert.equal(page.headers["x-frame-options"], undefined);
+	});
+
 	it("installs an app and opens each crumb on a port of its own", async () => {
 		assert.equal((await api("POST", "/api/apps", { id: "pub/board" })).status, 200);
 		board = (await api("POST", "/api/crumbs", { slug: "board", title: "Kitchen" })).json.crumb;

@@ -90,12 +90,12 @@ one) restarts the container, since Hamstr was started for the old one.
 
 ### The Home Assistant panel
 
-Port 8099 serves a small page for Home Assistant's sidebar (ingress) with links
-to Hamstr on the box's own addresses (`panel.mjs`): `homeassistant.local` and
-its IPs, or the TLS hostname. Only Home Assistant's ingress proxy
-(`172.30.32.2`) and loopback get it. Hamstr itself cannot run inside the panel:
-in home mode it is plain HTTP, which browsers refuse inside Home Assistant's
-HTTPS page.
+Port 8099 serves a small page for Home Assistant's sidebar (ingress)
+(`panel.mjs`). It tries to frame Hamstr when the schemes match, and otherwise
+offers links to the box's own addresses (`homeassistant.local`, its IPs, or the
+TLS hostname). Only Home Assistant's ingress proxy (`172.30.32.2`) and loopback
+get it. An HTTPS Home Assistant page cannot frame plain-HTTP Hamstr (mixed
+content); then the open-in-a-new-tab links are the path.
 
 ### Tailscale
 
