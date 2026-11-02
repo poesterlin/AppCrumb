@@ -255,7 +255,10 @@ export function createCore(options: CoreOptions = {}) {
 	// Store apps are <publisher>/<app>: remember which one each installed app
 	// is, so an update can never swap in someone else's app of the same name.
 	if (!db.prepare("SELECT 1 FROM pragma_table_info('apps') WHERE name = 'store_id'").get()) db.exec("ALTER TABLE apps ADD COLUMN store_id TEXT");
-	// Registered AppCrumb URLs. One is active; browse/install/update use that one.
+	// Which registered store an app was Got from; updates keep using that origin
+	// even when Settings has another store active.
+	if (!db.prepare("SELECT 1 FROM pragma_table_info('apps') WHERE name = 'source_store'").get()) db.exec("ALTER TABLE apps ADD COLUMN source_store TEXT");
+	// Registered AppCrumb URLs. One is active; browse and new Get use that one.
 	// HAMSTR_STORE seeds the first row on a fresh data directory; Settings owns the list after that.
 	ensureStores(db, { url: config.store, publicUrl: config.storePublic || config.store }, randomId, now);
 	// --- accounts ---------------------------------------------------------------------
@@ -272,6 +275,12 @@ export function createCore(options: CoreOptions = {}) {
 	});
 	const seeded = seedAccounts();
 	const stores = createStores({ db, randomId, now, audit: accounts.audit, HttpError });
+	// Apps installed before source_store: pin them to the store that is active
+	// now, so a later switch still updates them from the right catalog.
+	{
+		const active = stores.active();
+		if (active) db.prepare("UPDATE apps SET source_store = ? WHERE source_store IS NULL").run(active.id);
+	}
 
 	/** A fresh install gets the OIDC provider from the environment, and everyone
 	 *  who signed in before accounts existed is brought over (see importLegacyPeople).
@@ -371,6 +380,7 @@ export function createCore(options: CoreOptions = {}) {
 		return {
 			slug: app.slug,
 			storeId: app.store_id ?? null,
+			sourceStore: app.source_store ?? null,
 			name: app.name,
 			icon: app.icon,
 			summary: app.summary,
@@ -413,10 +423,22 @@ export function createCore(options: CoreOptions = {}) {
 	const activeStore = () => stores.active();
 	const activateStore = (actor: string, id: string) => stores.activate(actor, id);
 	const saveStore = (actor: string, input: Parameters<typeof stores.save>[1]) => stores.save(actor, input);
-	const deleteStore = (actor: string, id: string) => stores.remove(actor, id);
+	const deleteStore = (actor: string, id: string) => {
+		stores.remove(actor, id);
+		db.prepare("UPDATE apps SET source_store = NULL WHERE source_store = ?").run(id);
+	};
 
-	async function storeJson(path) {
-		const store = activeStore();
+	/** Store to use for an installed app's catalog/detail/update. Falls back to
+	 *  the active store when the app has none recorded or that store was removed. */
+	function storeForApp(app: { source_store?: string | null } | null | undefined) {
+		if (app?.source_store) {
+			const source = stores.get(app.source_store);
+			if (source) return source;
+		}
+		return activeStore();
+	}
+
+	async function storeJson(path, store = activeStore()) {
 		if (!store) throw new HttpError(503, "no app store is set up: an admin can add one under Settings → Stores");
 		let res;
 		try {
@@ -454,12 +476,16 @@ export function createCore(options: CoreOptions = {}) {
 
 	/** Install or update an app (`id` is the store's <publisher>/<app>); updates
 	 *  move every crumb of it to the new code. Locally an app goes by its own
-	 *  name, so one Hamstr holds one app of each name. */
+	 *  name, so one Hamstr holds one app of each name. Updates use the store the
+	 *  app was installed from when that store is still registered. */
 	const installing = new Map();
 	async function install(id, { version, allowEgress, user }) {
 		if (installing.has(id)) throw new HttpError(409, `${id} is already being installed`);
 		const job = (async () => {
-			const detail: any = await storeJson(`/api/v1/apps/${storePath(id)}`);
+			const hinted = id.includes("/") ? q.appByStoreId.get(id) : q.app.get(id);
+			const origin = storeForApp(hinted);
+			if (!origin) throw new HttpError(503, "no app store is set up: an admin can add one under Settings → Stores");
+			const detail: any = await storeJson(`/api/v1/apps/${storePath(id)}`, origin);
 			// The store's name for it (an old bare name redirects to it).
 			const storeId = String(detail.app?.id ?? id);
 			const releases = (detail.releases ?? []).filter((r) => r.status === "published");
@@ -491,8 +517,6 @@ export function createCore(options: CoreOptions = {}) {
 			if (newDevices.length && !allowEgress) {
 				throw new HttpError(403, `${manifest.name} wants to use the ${newDevices.join(", ")}; review and allow it first`);
 			}
-			const origin = activeStore();
-			if (!origin) throw new HttpError(503, "no app store is set up: an admin can add one under Settings → Stores");
 			const { file, sha } = await downloadBundle(origin.url, storeId, release.version, release.bundleSha256, tmpDir);
 			let uploaded;
 			try {
@@ -503,12 +527,12 @@ export function createCore(options: CoreOptions = {}) {
 			const stamp = now();
 			if (existing) {
 				db.prepare(
-					"UPDATE apps SET name = ?, icon = ?, summary = ?, version = ?, code_version = ?, bundle_sha = ?, manifest = ?, updated_at = ?, store_id = ? WHERE slug = ?",
-				).run(manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), stamp, storeId, slug);
+					"UPDATE apps SET name = ?, icon = ?, summary = ?, version = ?, code_version = ?, bundle_sha = ?, manifest = ?, updated_at = ?, store_id = ?, source_store = ? WHERE slug = ?",
+				).run(manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), stamp, storeId, origin.id, slug);
 			} else {
 				db.prepare(
-					"INSERT INTO apps (slug, store_id, name, icon, summary, version, code_version, bundle_sha, manifest, installed_by, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				).run(slug, storeId, manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), user.id, stamp, stamp);
+					"INSERT INTO apps (slug, store_id, source_store, name, icon, summary, version, code_version, bundle_sha, manifest, installed_by, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				).run(slug, storeId, origin.id, manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), user.id, stamp, stamp);
 			}
 			// Move existing crumbs. Their Durable Objects keep their data; migrations run on first use.
 			const failed = [];
@@ -927,6 +951,7 @@ export function createCore(options: CoreOptions = {}) {
 		crumbJson,
 		storesList,
 		activeStore,
+		storeForApp,
 		saveStore,
 		activateStore,
 		deleteStore,

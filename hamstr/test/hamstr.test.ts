@@ -740,6 +740,42 @@ describe("stores settings", () => {
 		}
 	});
 
+	it("updates an installed app from the store it came from after switching the active store", async () => {
+		const ada = await signIn(ADA);
+		const source = hamstr.core.activeStore();
+		assert.ok(source);
+		assert.equal(source.url, storeBase);
+		const apps = (await apiCall(ada, "GET", "/api/apps")).json.apps;
+		assert.equal(apps.find((a) => a.slug === "board").sourceStore, source.id);
+
+		const other = createStore({ dataDir: join(dir, "store-source-other"), rateLimit: false, logging: false });
+		const otherBase = `http://127.0.0.1:${(await other.listen(0, "127.0.0.1")).port}`;
+		try {
+			const created = await apiCall(ada, "POST", "/api/admin/stores", { url: otherBase, name: "Empty", active: true });
+			assert.equal(created.status, 200, created.text);
+			assert.equal(hamstr.core.activeStore().url, otherBase);
+			assert.equal((await apiCall(ada, "GET", "/api/market?limit=5")).json.apps?.length ?? 0, 0);
+
+			await publish({ slug: "board", name: "Board", icon: "📌", version: "1.2.0", ...ROLES }, "121212121212");
+			const updates = await ada.request("GET", "/api/apps/updates", { host: SHELL });
+			assert.equal(updates.json.updates.board.version, "1.2.0", updates.text);
+			const detail = await apiCall(ada, "GET", "/api/market/pub/board");
+			assert.equal(detail.status, 200, detail.text);
+			assert.equal(detail.json.app.id, "pub/board");
+			const r = await apiCall(ada, "POST", "/api/apps", { id: "pub/board" });
+			assert.equal(r.status, 200, r.text);
+			assert.equal(r.json.app.version, "1.2.0");
+			assert.equal(r.json.app.sourceStore, source.id);
+			assert.equal(celld.sites.get(crumbHost(board.id)), "121212121212");
+		} finally {
+			await other.close();
+			hamstr.core.activateStore("test", source.id);
+			for (const s of hamstr.core.storesList()) {
+				if (s.id !== source.id) hamstr.core.deleteStore("test", s.id);
+			}
+		}
+	});
+
 	it("seeds only once, and an empty list means no store", async () => {
 		const dataDir = join(dir, "hamstr-stores-seed");
 		const opts = {

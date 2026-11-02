@@ -26,7 +26,7 @@
 <div class="page-head">
 	<div>
 		<h1>Stores</h1>
-		<p class="dim">Catalogs this Hamstr can get apps from. Most installs keep the public AppCrumb active; only switch if you need another catalog.</p>
+		<p class="dim">Catalogs this Hamstr can get apps from. Browse and Get use the active one; each installed app keeps updating from the store it came from.</p>
 	</div>
 	<div class="head-actions"><button class="button" type="button" onclick={() => (editing = {})}>Add a store</button></div>
 </div>

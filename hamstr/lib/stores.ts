@@ -1,6 +1,7 @@
-// Registered AppCrumb URLs for one Hamstr. One row is active; browse, Get and
-// updates use that origin. HAMSTR_STORE seeds the first row on a fresh data
-// directory; Settings owns the list after that.
+// Registered AppCrumb URLs for one Hamstr. One row is active; browse and Get
+// use that origin. Each installed app remembers its source store for updates.
+// HAMSTR_STORE seeds the first row on a fresh data directory; Settings owns
+// the list after that.
 import type { DatabaseSync } from "node:sqlite";
 
 export interface StoreRow {
@@ -144,5 +145,5 @@ export function createStores({ db, randomId, now, audit, HttpError }: StoresDeps
 		audit(actor, "store.delete", id, { name: row.name, url: row.url });
 	}
 
-	return { list, active, activate, save, remove, parseUrl };
+	return { list, get: (id: string) => rowOf(get(id)), active, activate, save, remove, parseUrl };
 }

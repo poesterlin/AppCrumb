@@ -9,8 +9,9 @@ export async function load({ locals, params }) {
 	let row = id.includes("/") ? c.q.appByStoreId.get(id) : c.q.app.get(id);
 	let detail = null;
 	let error = null;
+	const origin = c.storeForApp(row);
 	try {
-		detail = await c.storeJson(`/api/v1/apps/${c.storePath(row?.store_id ?? id)}`);
+		detail = await c.storeJson(`/api/v1/apps/${c.storePath(row?.store_id ?? id)}`, origin);
 	} catch (err) {
 		error = err.status === 404 ? "not-found" : err.message;
 	}
@@ -27,6 +28,6 @@ export async function load({ locals, params }) {
 		installed,
 		detail,
 		error,
-		storePublic: c.activeStore()?.publicUrl ?? "",
+		storePublic: origin?.publicUrl ?? c.activeStore()?.publicUrl ?? "",
 	};
 }
