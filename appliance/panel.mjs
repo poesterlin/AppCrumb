@@ -15,22 +15,22 @@ if (env.TLS_HOSTNAME && env.HAMSTR_AUTH !== "none") {
 	links.push({ url: `https://${env.TLS_HOSTNAME}${port}/`, note: "Your Hamstr" });
 } else {
 	const port = `:${env.HTTP_PORT}`;
-	// Always homeassistant.local — the add-on's hostname is like e1255cb9-hamstr,
-	// which is not a LAN DNS name and must not become *.local.
-	links.push({ url: `http://homeassistant.local${port}/`, note: "On your home network" });
+	const lan = [];
+	const tailscale = [];
 	for (const a of Object.values(networkInterfaces()).flat()) {
 		if (a.family !== "IPv4" || a.internal) continue;
 		// Docker's and the Supervisor's own bridges are not reachable from outside.
 		if (/^172\.(1[6-9]|2\d|3[01])\./.test(a.address)) continue;
-		const tailscale = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a.address);
-		links.push({ url: `http://${a.address}${port}/`, note: tailscale ? "Over Tailscale" : "By IP address" });
+		const url = `http://${a.address}${port}/`;
+		if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a.address)) tailscale.push({ url, note: "Over Tailscale" });
+		else lan.push({ url, note: "By IP address" });
 	}
+	// Prefer a LAN IP: .local mDNS fails in many browsers/clients. Never use the
+	// add-on hostname (e1255cb9-hamstr) as *.local — it is not a LAN DNS name.
+	links.push(...lan, ...tailscale, { url: `http://homeassistant.local${port}/`, note: "On your home network (.local)" });
 }
 const [first, ...rest] = links;
-// Prefer a LAN IP for the iframe: .local is flaky from some clients, and the
-// add-on hostname must never be used (see above).
-const embed = links.find((l) => l.note === "By IP address") ?? first;
-const embedUrl = JSON.stringify(embed.url);
+const embedUrl = JSON.stringify(first.url);
 const page = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Hamstr</title>
 <style>

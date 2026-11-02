@@ -156,7 +156,7 @@ try {
 	// The Home Assistant panel links to the shell; only ingress and loopback get it.
 	const panel = sh("docker", ["exec", HOME, "curl", "-s", "http://127.0.0.1:8099/"]);
 	assert.match(panel, /Open Hamstr/);
-	assert.match(panel, /href="http:\/\/homeassistant\.local:8000\/"/);
+	assert.match(panel, /href="http:\/\/homeassistant\.local:8000\/"/, ".local stays listed (last when a LAN IP exists)");
 	assert.match(panel, /id="embed"/, "the panel tries to frame Hamstr before falling back");
 	const homeIp = sh("docker", ["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", HOME]).trim();
 	assert.doesNotMatch(panel, /http:\/\/172\./, "Docker's bridge addresses are left out");
