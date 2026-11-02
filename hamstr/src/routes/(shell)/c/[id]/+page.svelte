@@ -1,96 +1,13 @@
 <script>
-	import { onMount } from "svelte";
-	import { goto, invalidateAll } from "$app/navigation";
+	import { invalidateAll } from "$app/navigation";
 	import { page } from "$app/state";
 	import { api } from "#lib/client/api.ts";
-	import { askManage, oops, toast } from "#lib/client/ui.svelte.ts";
-	import { ICON } from "@hamstr/ui/icons.ts";
-	import AppIcon from "@hamstr/ui/components/AppIcon.svelte";
-	import MoreMenu from "@hamstr/ui/components/MoreMenu.svelte";
-	import { downloadCrumb } from "#lib/client/download.ts";
+	import { oops } from "#lib/client/ui.svelte.ts";
+	import CrumbView from "#lib/components/CrumbView.svelte";
 
 	let { data } = $props();
 
 	const crumb = $derived(data.crumb);
-	const app = $derived(data.app);
-	// Back to where it lives: the app's own page, or Home for a single-instance app.
-	const back = $derived(app && app.instances !== "single" ? `/a/${app.slug}` : "/");
-
-	// Only a device the admin approved at install (the manifest's `devices`) is
-	// handed to the app's frame; the browser still asks the person.
-	const frameAllow = $derived(["clipboard-write", "fullscreen", ...(app?.devices ?? [])].join("; "));
-	const needsMic = $derived(Boolean(app?.devices?.includes("microphone")));
-	// Browsers allow the microphone on https and localhost only.
-	const micBlocked = $derived.by(() => {
-		if (!needsMic || !frameSrc) return false;
-		try {
-			const u = new URL(frameSrc);
-			return !(u.protocol === "https:" || u.hostname === "localhost" || u.hostname.endsWith(".localhost") || /^127\./.test(u.hostname));
-		} catch {
-			return false;
-		}
-	});
-
-	let title = $state("");
-	let frameSrc = $state("");
-	let titleInput = $state(null);
-
-	$effect(() => {
-		if (data.crumb) title = data.crumb.title;
-	});
-
-	onMount(async () => {
-		if (!crumb || crumb.trashedAt) return;
-		try {
-			const { url } = await api(`/api/crumbs/${crumb.id}/open`, { method: "POST", body: { path: "/" } });
-			frameSrc = url;
-		} catch (err) {
-			oops(err);
-		}
-	});
-
-	async function saveTitle() {
-		const value = title.trim();
-		if (!value || value === crumb.title) return void (title = crumb.title);
-		try {
-			await api(`/api/crumbs/${crumb.id}`, { method: "PATCH", body: { title: value } });
-			await invalidateAll();
-		} catch (err) {
-			title = crumb.title;
-			oops(err);
-		}
-	}
-
-	async function download() {
-		toast("Preparing the download…");
-		try {
-			toast(`Downloaded ${await downloadCrumb(crumb.id)}`);
-		} catch (err) {
-			oops(err);
-		}
-	}
-
-	function renameNow() {
-		titleInput?.focus();
-		titleInput?.select();
-	}
-
-	const menu = $derived([
-		{ label: "Rename", icon: "pencil", onclick: renameNow },
-		{ label: "Manage data…", icon: "download", hidden: !app, onclick: () => askManage(crumb, app) },
-		{ label: `About ${app?.name ?? "this app"}`, icon: "info", hidden: !app, onclick: () => goto(`/a/${app.slug}`) },
-		{ label: "Move to trash", icon: "trash", danger: true, separator: true, onclick: trash },
-	]);
-
-	async function trash() {
-		try {
-			await api(`/api/crumbs/${crumb.id}/trash`, { method: "POST", body: {} });
-			toast("Moved to the trash");
-			await goto(back);
-		} catch (err) {
-			oops(err);
-		}
-	}
 
 	async function restore() {
 		try {
@@ -121,57 +38,6 @@
 			</div>
 		</div>
 	{:else}
-		<div class="crumb-view">
-			<div class="crumb-bar">
-				<a class="icon-button" href={back} aria-label="Back" title="Back">{@html ICON.back}</a>
-				<a class="crumb-app" href={app ? `/a/${app.slug}` : back} title={app ? `All of ${app.name}` : "Back"}>
-					<AppIcon app={crumb.app} />
-					<span class="hide-sm">{crumb.app.name}</span>
-				</a>
-				<span class="crumb-sep hide-sm">{@html ICON.chevron}</span>
-				<input
-					class="crumb-title"
-					bind:this={titleInput}
-					bind:value={title}
-					maxlength="80"
-					aria-label="Name"
-					title="Click to rename"
-					onblur={saveTitle}
-					onkeydown={(event) => {
-						if (event.key === "Enter") event.currentTarget.blur();
-						if (event.key === "Escape") {
-							title = crumb.title;
-							event.currentTarget.blur();
-						}
-					}}
-				/>
-				<span class="spacer"></span>
-				{#if app?.canExport}
-					<button type="button" class="icon-button hide-sm" onclick={download} aria-label="Download data" title="Download data">{@html ICON.download}</button>
-				{/if}
-				<a class="icon-button" href="/c/{crumb.id}/open" target="_blank" rel="noopener" aria-label="Open in a new tab" title="Open in a new tab">
-					{@html ICON.external}
-				</a>
-				<MoreMenu items={menu} />
-			</div>
-			{#if micBlocked}
-				<div class="callout warn crumb-warn" role="alert">
-					<strong>{app.name} needs the microphone, but this page is not on https.</strong>
-					<span class="small">Your browser blocks the microphone on plain http addresses, so the app can't listen here. Open Hamstr over https (a Tailscale or Cloudflare link, or a reverse proxy with a certificate) and it will work.</span>
-				</div>
-			{/if}
-			{#if frameSrc}
-				<!-- A crumb is another origin. No top navigation without a click, so an
-				     app cannot silently replace the shell with a look-alike page. -->
-				<iframe
-					class="crumb-frame"
-					title={crumb.title}
-					sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals allow-top-navigation-by-user-activation"
-					allow={frameAllow}
-					src={frameSrc}></iframe>
-			{:else}
-				<div class="crumb-loading"><span class="spinner"></span></div>
-			{/if}
-		</div>
+		<CrumbView {crumb} app={data.app} />
 	{/if}
 {/if}

@@ -34,15 +34,31 @@ const embedUrl = JSON.stringify(embed.url);
 const page = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Hamstr</title>
 <style>
-html,body{height:100%;margin:0}
-body{font:18px/1.6 system-ui,sans-serif;color:#18181b;background:#f7f7f9}
-body.embedded{overflow:hidden;background:#111}
-#embed{position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff}
-#embed[hidden]{display:none!important}
-#fallback{max-width:34em;margin:0 auto;padding:32px 20px}
-a.button{display:inline-block;background:#5452e8;color:#fff;text-decoration:none;font-weight:600;border-radius:12px;padding:14px 22px;margin:8px 0 24px}
-ul{padding-left:1.2em}li{margin:6px 0}code{font-size:16px}p.dim{color:#5b5b66}
-@media(prefers-color-scheme:dark){body{color:#f4f4f6;background:#111116}a{color:#9d9cff}a.button{color:#fff}p.dim{color:#a3a3ad}}
+html, body { height: 100%; margin: 0; }
+body { font: 18px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #18181b; background: #f7f7f9; }
+body.embedded { overflow: hidden; background: #111; }
+#embed { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+#embed[hidden] { display: none !important; }
+#fallback { max-width: 34em; margin: 0 auto; padding: 32px 20px; }
+h1 { font-size: 1.75rem; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 8px; }
+#fallback > p { margin: 0 0 16px; }
+a.button {
+	display: inline-block; background: #5452e8; color: #fff; text-decoration: none;
+	font-weight: 600; border-radius: 12px; padding: 14px 22px; margin: 8px 0 24px;
+}
+a.button:hover { background: #4340d4; }
+ul { padding-left: 1.2em; margin: 0 0 8px; }
+li { margin: 6px 0; }
+code { font-size: 16px; }
+a { color: #4340d4; }
+p.dim { color: #5b5b66; margin: 28px 0 0; }
+@media (prefers-color-scheme: dark) {
+	body { color: #f4f4f6; background: #111116; }
+	a { color: #9d9cff; }
+	a.button { color: #fff; background: #5452e8; }
+	a.button:hover { background: #6a68f0; }
+	p.dim { color: #a3a3ad; }
+}
 </style></head><body>
 <iframe id="embed" title="Hamstr" hidden></iframe>
 <div id="fallback">
