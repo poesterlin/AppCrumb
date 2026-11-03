@@ -1,4 +1,4 @@
-# Hamstr
+# AppCrumb & Hamstr
 
 > **Work in progress.**
 > It runs and has tests, but nothing is stable yet.
