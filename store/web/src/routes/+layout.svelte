@@ -44,7 +44,16 @@
 
 {#if !demo}
 	<footer class="foot">
-		<p class="dim small">Open API: <a href="/api/v1/apps">/api/v1/apps</a> · <a href="/about">How it works</a> · <a href="/publish">Publish an app</a> · <a href="/account">Publisher account</a> · <a href="/policy">Content policy</a>{#if legal.imprint} · <a href={legal.imprint} data-sveltekit-reload>Impressum</a>{/if}{#if legal.privacy} · <a href={legal.privacy} data-sveltekit-reload>Datenschutz</a>{/if}</p>
+		<nav aria-label="Store">
+			<a href="https://docs.appcrumb.store" rel="noopener">Docs</a>
+			<a href="/api/v1/apps">API</a>
+			<a href="https://github.com/poesterlin/AppCrumb" rel="noopener">GitHub</a>
+		</nav>
+		<nav aria-label="Policies">
+			<a href="/policy">Content policy</a>
+			{#if legal.imprint}<a href={legal.imprint} data-sveltekit-reload>Impressum</a>{/if}
+			{#if legal.privacy}<a href={legal.privacy} data-sveltekit-reload>Datenschutz</a>{/if}
+		</nav>
 	</footer>
 {/if}
 

@@ -7,6 +7,9 @@ import { visitor } from "@hamstr/runtime/visitor.ts";
 
 const COLORS = ["sun", "leaf", "sky", "rose", "sand"];
 
+/** A row as `Board.list()` returns it; OBJECTS calls are untyped at the boundary. */
+type Pin = { id: number; text: string; color: string; author: string; authorId: string | null; at: string };
+
 const esc = (value) =>
 	String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 
@@ -51,7 +54,7 @@ export default {
 
 		// Hamstr's "Download data" (hamstr.json "export"): the whole board as JSON.
 		if (url.pathname === "/export") {
-			const pins = await obj.call("Board", "board", "list");
+			const pins = await obj.call<Pin[]>("Board", "board", "list");
 			return Response.json(
 				{ app: "pinboard", exportedAt: new Date().toISOString(), pins: pins.map(({ text, color, author, at }) => ({ text, color, author, at })) },
 				{ headers: { "content-disposition": 'attachment; filename="pinboard.json"' } },
@@ -88,7 +91,7 @@ export default {
 		}
 		if (url.pathname !== "/") return page("<p>Not found.</p>", 404);
 
-		const pins = await obj.call("Board", "board", "list");
+		const pins = await obj.call<Pin[]>("Board", "board", "list");
 		const canRemove = (pin) => me.can("moderate") || (me.can("pin") && me.id && pin.authorId === me.id);
 		const compose = me.can("pin")
 			? `<form class="compose" method="post" action="/pin">

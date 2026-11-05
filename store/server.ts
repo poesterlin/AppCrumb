@@ -26,7 +26,7 @@ import { CATEGORIES, ManifestError, validateManifest, validatePublisherName, val
 import { clientIp as visitorIp, parseTrustedProxies, type ClientIpOptions } from "./client-ip.ts";
 import { type Db, importSqlite, isUniqueViolation, migrate, openDb, type Sql } from "./db.ts";
 import { refusePublisherName } from "./names.ts";
-import { logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, setTags, type StoreSettings } from "./releases.ts";
+import { EVENTS_KEEP_DAYS, logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, setTags, type StoreSettings } from "./releases.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // The web UI: a SvelteKit single-page app built into web/build (see web/).
@@ -279,6 +279,7 @@ export function createStore(options: StoreOptions = {}) {
 		// a slot forever.
 		await db.run("DELETE FROM releases WHERE status = 'uploading' AND created_at < now() - interval '24 hours'");
 		await sweepBlobs();
+		await pruneEvents();
 	}
 
 	/** Delete the files of releases that are gone: removed ones, and rejected
@@ -299,6 +300,9 @@ export function createStore(options: StoreOptions = {}) {
 			if (row.source_sha) into.add(`source-${row.source_sha}.tgz`);
 		}
 		for (const name of dead) if (!live.has(name)) rmSync(join(blobsDir, name), { force: true });
+	}
+	async function pruneEvents() {
+		await db.run("DELETE FROM events WHERE at < now() - make_interval(days => $1)", [EVENTS_KEEP_DAYS]);
 	}
 	let sweepTimer = null;
 
@@ -1295,7 +1299,10 @@ export function createStore(options: StoreOptions = {}) {
 				demoTimer = setInterval(() => cleanupDemos().catch((err) => console.error("store: demo cleanup failed", err)), 60_000);
 				demoTimer.unref();
 			}
-			sweepTimer = setInterval(() => sweepBlobs().catch((err) => console.error("store: blob sweep failed", err)), 10 * 60 * 1000);
+			sweepTimer = setInterval(() => {
+				sweepBlobs().catch((err) => console.error("store: blob sweep failed", err));
+				pruneEvents().catch((err) => console.error("store: event prune failed", err));
+			}, 10 * 60 * 1000);
 			sweepTimer.unref();
 			return new Promise<AddressInfo>((resolvePromise, reject) => {
 				server.once("error", reject);

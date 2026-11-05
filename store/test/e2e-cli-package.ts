@@ -46,6 +46,10 @@ try {
 	// The fixture depends on @hamstr/runtime via file:; outside the repo that
 	// path is wrong, so ship a copy next to the app and reinstall.
 	cpSync(join(repo, "packages", "runtime"), join(work, "runtime"), { recursive: true });
+	// The fixture's lockfile still pins the repo path it was installed from;
+	// npm refuses a missing target, so the app starts from the written
+	// package.json alone.
+	rmSync(join(app, "package-lock.json"), { force: true });
 	writeFileSync(
 		join(app, "package.json"),
 		`${JSON.stringify({ private: true, type: "module", dependencies: { "@hamstr/runtime": "file:../runtime" } }, null, "\t")}\n`,

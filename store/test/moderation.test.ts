@@ -144,11 +144,35 @@ describe("classifier client", () => {
 		assert.equal(c.collectsSecrets, 0.99);
 	});
 
+	it("unwraps Cloudflare Workers AI { result } envelopes", async () => {
+		answer = () => [
+			200,
+			{
+				success: true,
+				result: {
+					model: "clef",
+					answers: {
+						harm: { type: "score", score: 1, confidence: 0.7 },
+						kind: { type: "choice", choice: "utility", confidence: 0.8, probabilities: { utility: 0.8 } },
+						impersonation: { type: "noul", noul: 0.05 },
+						collects_secrets: { type: "noul", noul: 0.02 },
+					},
+				},
+			},
+		];
+		const c = await classify({ url, apiKey: "k", model: "clef" }, { listing: { name: "x" } });
+		assert.equal(c.model, "clef");
+		assert.equal(c.risk, 0.25);
+		assert.equal(c.kind.choice, "utility");
+	});
+
 	it("fails loudly on errors and malformed answers", async () => {
 		answer = () => [429, { error: "slow down" }];
 		await assert.rejects(classify({ url, model: "m" }, {}), /429/);
 		answer = () => [200, { answers: {} }];
 		await assert.rejects(classify({ url, model: "m" }, {}), /no harm score/);
+		answer = () => [200, { success: false, errors: [{ message: "quota" }], result: null }];
+		await assert.rejects(classify({ url, model: "m" }, {}), /quota/);
 	});
 });
 

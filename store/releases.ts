@@ -10,6 +10,9 @@ import type { Sql } from "./db.ts";
 /** Rejected bundles stay this long, so a moderator can reverse the decision. */
 export const REJECTED_KEEP_DAYS = 30;
 
+/** Audit-log rows (publish, reject, suspend, …) older than this are deleted. */
+export const EVENTS_KEEP_DAYS = 90;
+
 export async function logEvent(sql: Sql, actor: string, action: string, target: string, note: string | null = null): Promise<void> {
 	await sql.query("INSERT INTO events (at, actor, action, target, note) VALUES (now(), $1, $2, $3, $4)", [actor, action, target, note]);
 }

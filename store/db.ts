@@ -289,6 +289,12 @@ export async function migrate(db: Db): Promise<void> {
 		// first one's migrations as applied.
 		await sql.query("SELECT pg_advisory_xact_lock(4823901)");
 		const done = new Set((await sql.query("SELECT version FROM schema_migrations")).map((r) => Number(r.version)));
+		// A newer build may have added migrations this one cannot read. Starting
+		// would run queries against columns it does not know, so refuse to boot.
+		const newest = Math.max(0, ...done);
+		if (newest > MIGRATIONS.length) {
+			throw new Error(`store database is at schema ${newest}, this build knows ${MIGRATIONS.length}: refusing to start on newer data`);
+		}
 		for (const [i, text] of MIGRATIONS.entries()) {
 			const version = i + 1;
 			if (done.has(version)) continue;

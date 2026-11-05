@@ -38,7 +38,7 @@ export default {
 		if (url.pathname === "/export") {
 			const me = visitor(request);
 			if (me.role !== "owner") return new Response("owner only\n", { status: 403 });
-			const [people, pairs] = await Promise.all([obj.call("Draw", "main", "list"), obj.call("Draw", "main", "pairs")]);
+			const [people, pairs] = await Promise.all([obj.call<string[]>("Draw", "main", "list"), obj.call<[string, string][]>("Draw", "main", "pairs")]);
 			return Response.json(
 				{ app: "secret-santa", exportedAt: new Date().toISOString(), people, pairs: pairs.map(([giver, receiver]) => ({ giver, receiver })) },
 				{ headers: { "content-disposition": 'attachment; filename="secret-santa.json"' } },
@@ -63,7 +63,7 @@ export default {
 			}
 			if (url.pathname === "/draw") {
 				try {
-					const pairs = await obj.call("Draw", "main", "draw");
+					const pairs = await obj.call<[string, string][]>("Draw", "main", "draw");
 					return page(`<h1>Who buys for whom</h1>
 <p class="dim">Screenshot this, then delete the draw if the surprise matters.</p>
 <div class="card"><ul class="pairs">${pairs.map(([a, b]) => `<li><span>${esc(a)}</span><span>→ ${esc(b)}</span></li>`).join("")}</ul></div>
@@ -75,8 +75,8 @@ export default {
 			return page("<p>Not found.</p>", 404);
 		}
 
-		const names = await obj.call("Draw", "main", "list");
-		const pairs = await obj.call("Draw", "main", "pairs");
+		const names = await obj.call<string[]>("Draw", "main", "list");
+		const pairs = await obj.call<[string, string][]>("Draw", "main", "pairs");
 		const list = names.length
 			? `<ul>${names.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`
 			: '<p class="dim">No names yet.</p>';

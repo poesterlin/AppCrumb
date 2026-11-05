@@ -688,7 +688,15 @@ describe("web UI", () => {
 				assert.match(res.headers.get("content-type"), /text\/html/);
 				assert.equal(res.headers.get("cache-control"), "no-cache");
 				const hash = createHash("sha256").update(script).digest("base64");
-				assert.match(res.headers.get("content-security-policy"), new RegExp(`script-src 'self' 'sha256-${hash.replace(/[+/]/g, "\\$&")}'`));
+				const scriptSrc = res.headers
+					.get("content-security-policy")
+					.split(";")
+					.map((part) => part.trim())
+					.find((part) => part.startsWith("script-src"));
+				assert.ok(scriptSrc, "a script-src directive");
+				assert.match(scriptSrc, /'self'/);
+				// The bootstrap script's hash sits beside any allowed analytics origin.
+				assert.ok(scriptSrc.includes(`'sha256-${hash}'`), "the bootstrap script's hash is allowed");
 			}
 			const css = await fetch(`${base}/ui.css`);
 			assert.equal(css.status, 200);

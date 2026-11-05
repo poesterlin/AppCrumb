@@ -1,0 +1,458 @@
+/* The self-hosting primitive: one 8 second loop, two architectures.
+   Used by /about. Pure CSS on top of inline SVG (the store CSP allows no
+   inline styles). Left: three always-on app + Postgres pairs, 90% memory.
+   Right: one runtime, three SQLite files on disk; a request lifts one file
+   into its app, writes, and docks it again. */
+
+.pn-visual {
+  display: flex;
+  gap: 16px;
+}
+
+.pn-half {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line, rgba(20, 21, 27, 0.1));
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(17, 18, 26, 0.04), 0 20px 44px -34px rgba(17, 18, 26, 0.32);
+}
+
+.pn-half--heavy { --pn-drop: 82px; border-color: rgba(200, 67, 29, 0.2); }
+.pn-half--light { --pn-drop: 96px; border-color: rgba(125, 150, 108, 0.32); }
+
+.pn-svg { display: block; width: 100%; height: auto; }
+.pn-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+@media (max-width: 760px) {
+  .pn-visual { flex-direction: column; gap: 14px; }
+}
+
+/* ── shared svg parts ───────────────────────────────────────────────── */
+
+.pn-ambient--heavy { fill: rgba(200, 67, 29, 0.05); filter: blur(26px); }
+.pn-ambient--light { fill: rgba(125, 150, 108, 0.07); filter: blur(26px); }
+
+/* ── heavy side ─────────────────────────────────────────────────────── */
+
+.pn-heavy-link {
+  fill: none;
+  stroke: #c8431d;
+  stroke-width: 1.8;
+  opacity: 0.38;
+}
+
+.pn-heavy-link__head { fill: #c8431d; stroke: none; opacity: 0.65; }
+
+.pn-app--heavy {
+  filter: drop-shadow(0 6px 10px rgba(120, 60, 40, 0.1));
+  animation: pn-hum 4s ease-in-out infinite;
+}
+
+.pn-app--heavy .pn-icon { color: #c8431d; }
+
+.pn-app--b { animation-delay: -0.6s; }
+.pn-app--c { animation-delay: -1.2s; }
+
+.pn-app__box {
+  fill: #fffaf7;
+  stroke: #c4623f;
+  stroke-width: 2;
+}
+
+.pn-stack {
+  filter: drop-shadow(0 5px 10px rgba(120, 60, 40, 0.08));
+}
+
+.pn-leds circle { fill: #c8431d; }
+.pn-leds { animation: pn-blink 1.4s steps(3, end) infinite; }
+.pn-leds--b { animation-delay: -0.45s; }
+.pn-leds--c { animation-delay: -0.9s; }
+
+.pn-ping {
+  fill: none;
+  stroke: #c8431d;
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pn-db-flash {
+  fill: rgba(200, 67, 29, 0.05);
+  stroke: #d9a28c;
+  stroke-width: 1.6;
+  opacity: 0;
+}
+
+.pn-query {
+  fill: #b45309;
+  opacity: 0;
+}
+
+/* ── light side ─────────────────────────────────────────────────────── */
+
+.pn-runtime {
+  fill: rgba(125, 150, 108, 0.06);
+  stroke: #a8bba0;
+  stroke-width: 1.4;
+}
+
+.pn-tray__box {
+  fill: #fbfbf8;
+  stroke: #d0d0c9;
+  stroke-width: 1.4;
+}
+
+.pn-tray__shelf {
+  fill: #f2f3ee;
+  stroke: #cfd4c8;
+  stroke-width: 1.4;
+}
+
+.pn-dock { fill: #e2e5dc; stroke: #c2c6bb; stroke-width: 1; }
+
+.pn-drive rect,
+.pn-drive path,
+.pn-drive circle {
+  fill: none;
+  stroke: #9aa096;
+  stroke-width: 1.4;
+}
+
+.pn-drive circle { fill: #9aa096; stroke: none; }
+
+.pn-slot__box {
+  fill: #ffffff;
+  stroke: #9fa39c;
+  stroke-width: 1.4;
+  stroke-dasharray: 6 5;
+}
+
+.pn-slot__box-on {
+  fill: #eaf2e3;
+  stroke: #6f8a5f;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 4px 10px rgba(95, 122, 74, 0.16));
+}
+
+.pn-icon--dim { color: #8b8d91; opacity: 0.8; }
+.pn-icon--lit { color: #5f7a50; }
+
+.pn-conn__base {
+  fill: none;
+  stroke: #a8aca5;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 6;
+  opacity: 0.9;
+}
+
+.pn-conn__on {
+  fill: none;
+  stroke: #6f8a5f;
+  stroke-width: 2;
+}
+
+.pn-beam { fill: url(#pn-beam); }
+
+.pn-write { fill: none; stroke: #5f7a50; stroke-width: 1.8; }
+.pn-write__head { fill: #5f7a50; }
+
+.pn-ripple {
+  fill: none;
+  stroke: #7d966c;
+  stroke-width: 1.8;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pn-dock-db--photos { animation: pn-dock-photos 8s ease-in-out infinite; }
+.pn-dock-db--invoices { animation: pn-dock-invoices 8s ease-in-out infinite; }
+
+/* requests: the same warm packet on both sides */
+.pn-req {
+  fill: #b45309;
+  opacity: 0;
+}
+
+.pn-req-halo {
+  fill: rgba(180, 83, 9, 0.12);
+  opacity: 0;
+}
+
+/* ── gauge ──────────────────────────────────────────────────────────── */
+
+.pn-gauge__track {
+  fill: #ecebe8;
+  stroke: #dedcd7;
+  stroke-width: 1;
+}
+
+.pn-gauge__fill--heavy {
+  fill: url(#pn-heavy-gauge);
+  animation: pn-ram-heavy 8s ease-in-out infinite, pn-jitter 0.34s steps(2, end) infinite;
+}
+
+.pn-gauge__fill--light {
+  fill: url(#pn-light-gauge);
+  animation: pn-ram-light 8s ease-in-out infinite;
+}
+
+.pn-gauge__chip--heavy { color: #a83a15; }
+.pn-gauge__chip--light { color: #5f7a50; }
+
+.pn-gauge__value {
+  font-family: var(--font, "Nunito", system-ui, sans-serif);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.pn-gauge__value--heavy { fill: #a83a15; }
+.pn-gauge__value--light { fill: #5f7a50; }
+
+/* ── the 8 second storyboard ────────────────────────────────────────────
+   0.0–1.4s  idle
+   1.4–2.4s  request #1 → photos
+   2.4–4.0s  wake, write
+   4.0–5.0s  save, dock, sleep
+   5.2–6.4s  request #2 → invoices
+   6.4–8.0s  wake, write, save, dock
+   ────────────────────────────────────────────────────────────────────── */
+
+/* request 1 */
+.pn-req--photos { animation: pn-req-photos 8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.pn-req-halo--photos { animation: pn-req-halo-photos 8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+@keyframes pn-req-photos {
+  0%, 17% { transform: translateY(0); opacity: 0; }
+  19% { opacity: 1; }
+  27% { transform: translateY(var(--pn-drop)); opacity: 1; }
+  30%, 100% { transform: translateY(var(--pn-drop)); opacity: 0; }
+}
+
+@keyframes pn-req-halo-photos {
+  0%, 17% { transform: translateY(0); opacity: 0; }
+  19% { opacity: 0.55; }
+  27% { transform: translateY(var(--pn-drop)); opacity: 0.35; }
+  30%, 100% { transform: translateY(var(--pn-drop)); opacity: 0; }
+}
+
+/* the photos app lights, the database rises */
+.pn-wake--photos { animation: pn-wake-photos 8s ease-in-out infinite; }
+
+@keyframes pn-wake-photos {
+  0%, 22% { opacity: 0; }
+  26%, 54% { opacity: 1; }
+  60%, 100% { opacity: 0; }
+}
+
+.pn-rise--photos { animation: pn-rise-photos 8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+
+@keyframes pn-rise-photos {
+  0%, 26% { transform: translateY(0); }
+  33%, 47% { transform: translateY(-270px); }
+  56%, 100% { transform: translateY(0); }
+}
+
+@keyframes pn-dock-photos {
+  0%, 24% { opacity: 1; }
+  28%, 54% { opacity: 0.2; }
+  60%, 100% { opacity: 1; }
+}
+
+/* the write lands and saves to disk */
+.pn-ping--photos { animation: pn-ping-photos 8s ease-out infinite; }
+.pn-db-flash--photos { animation: pn-db-flash-photos 8s ease-in-out infinite; }
+.pn-query--photos { animation: pn-query-photos 8s ease-in-out infinite; }
+
+@keyframes pn-ping-photos {
+  0%, 24% { opacity: 0; transform: scale(0.94); }
+  27% { opacity: 0.85; transform: scale(1); }
+  36% { opacity: 0; transform: scale(1.07); }
+  100% { opacity: 0; }
+}
+
+@keyframes pn-db-flash-photos {
+  0%, 25% { opacity: 0; }
+  28% { opacity: 0.95; }
+  38%, 100% { opacity: 0; }
+}
+
+@keyframes pn-query-photos {
+  0%, 27% { transform: translateY(0); opacity: 0; }
+  29% { opacity: 1; }
+  34% { transform: translateY(46px); opacity: 1; }
+  37% { transform: translateY(46px); opacity: 1; }
+  43% { transform: translateY(0); opacity: 1; }
+  45%, 100% { transform: translateY(0); opacity: 0; }
+}
+
+.pn-ripple--photos { animation: pn-ripple-photos 8s ease-out infinite; }
+
+@keyframes pn-ripple-photos {
+  0%, 50% { opacity: 0; transform: scale(0.35); }
+  53% { opacity: 0.85; transform: scale(0.65); }
+  63%, 100% { opacity: 0; transform: scale(1.45); }
+}
+
+/* request 2 */
+.pn-req--invoices { animation: pn-req-invoices 8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.pn-req-halo--invoices { animation: pn-req-halo-invoices 8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+@keyframes pn-req-invoices {
+  0%, 66% { transform: translateY(0); opacity: 0; }
+  68% { opacity: 1; }
+  76% { transform: translateY(var(--pn-drop)); opacity: 1; }
+  79%, 100% { transform: translateY(var(--pn-drop)); opacity: 0; }
+}
+
+@keyframes pn-req-halo-invoices {
+  0%, 66% { transform: translateY(0); opacity: 0; }
+  68% { opacity: 0.55; }
+  76% { transform: translateY(var(--pn-drop)); opacity: 0.35; }
+  79%, 100% { transform: translateY(var(--pn-drop)); opacity: 0; }
+}
+
+.pn-wake--invoices { animation: pn-wake-invoices 8s ease-in-out infinite; }
+
+@keyframes pn-wake-invoices {
+  0%, 71% { opacity: 0; }
+  75%, 94% { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+
+.pn-rise--invoices { animation: pn-rise-invoices 8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+
+@keyframes pn-rise-invoices {
+  0%, 75% { transform: translateY(0); }
+  82%, 88% { transform: translateY(-270px); }
+  96%, 100% { transform: translateY(0); }
+}
+
+@keyframes pn-dock-invoices {
+  0%, 72% { opacity: 1; }
+  76%, 92% { opacity: 0.2; }
+  97%, 100% { opacity: 1; }
+}
+
+.pn-ping--invoices { animation: pn-ping-invoices 8s ease-out infinite; }
+.pn-db-flash--invoices { animation: pn-db-flash-invoices 8s ease-in-out infinite; }
+.pn-query--invoices { animation: pn-query-invoices 8s ease-in-out infinite; }
+
+@keyframes pn-ping-invoices {
+  0%, 72% { opacity: 0; transform: scale(0.94); }
+  75% { opacity: 0.85; transform: scale(1); }
+  84%, 100% { opacity: 0; transform: scale(1.07); }
+}
+
+@keyframes pn-db-flash-invoices {
+  0%, 73% { opacity: 0; }
+  76% { opacity: 0.95; }
+  86%, 100% { opacity: 0; }
+}
+
+@keyframes pn-query-invoices {
+  0%, 75% { transform: translateY(0); opacity: 0; }
+  77% { opacity: 1; }
+  82% { transform: translateY(46px); opacity: 1; }
+  85% { transform: translateY(46px); opacity: 1; }
+  91% { transform: translateY(0); opacity: 1; }
+  93%, 100% { transform: translateY(0); opacity: 0; }
+}
+
+.pn-ripple--invoices { animation: pn-ripple-invoices 8s ease-out infinite; }
+
+@keyframes pn-ripple-invoices {
+  0%, 90% { opacity: 0; transform: scale(0.35); }
+  93% { opacity: 0.85; transform: scale(0.65); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* memery gauges */
+@keyframes pn-ram-light {
+  0%, 26% { width: 17px; }
+  32%, 54% { width: 63px; }
+  60%, 74% { width: 17px; }
+  80%, 94% { width: 63px; }
+  98%, 100% { width: 17px; }
+}
+
+@keyframes pn-ram-heavy {
+  0%, 24% { width: 313px; }
+  28%, 36% { width: 327px; }
+  42%, 72% { width: 313px; }
+  76%, 84% { width: 327px; }
+  90%, 100% { width: 313px; }
+}
+
+@keyframes pn-jitter {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(0.7px); }
+}
+
+/* the number swaps only while the app is awake */
+.pn-value--idle { animation: pn-value-idle 8s linear infinite; }
+.pn-value--busy { animation: pn-value-busy 8s linear infinite; }
+
+@keyframes pn-value-idle {
+  0%, 26% { opacity: 1; }
+  28%, 56% { opacity: 0; }
+  58%, 75% { opacity: 1; }
+  77%, 96% { opacity: 0; }
+  98%, 100% { opacity: 1; }
+}
+
+@keyframes pn-value-busy {
+  0%, 27% { opacity: 0; }
+  29%, 56% { opacity: 1; }
+  58%, 76% { opacity: 0; }
+  78%, 96% { opacity: 1; }
+  98%, 100% { opacity: 0; }
+}
+
+/* machinery */
+@keyframes pn-blink {
+  0% { opacity: 0.3; }
+  40% { opacity: 1; }
+  70% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@keyframes pn-hum {
+  0%, 100% { opacity: 0.86; }
+  50% { opacity: 1; }
+}
+
+/* ── reduced motion: one complete hero frame ────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .pn-svg *,
+  .pn-value--idle,
+  .pn-value--busy {
+    animation: none !important;
+  }
+
+  .pn-req,
+  .pn-req-halo,
+  .pn-ripple,
+  .pn-ping,
+  .pn-query {
+    opacity: 0;
+  }
+
+  .pn-wake--photos { opacity: 1; }
+  .pn-wake--invoices { opacity: 0; }
+
+  .pn-rise--photos { transform: translateY(-270px); }
+  .pn-rise--invoices { transform: translateY(0); }
+
+  .pn-dock-db--photos { opacity: 0.2; }
+  .pn-dock-db--invoices { opacity: 1; }
+
+  .pn-gauge__fill--light { width: 63px; }
+  .pn-gauge__fill--heavy { width: 313px; }
+  .pn-value--idle { opacity: 0; }
+  .pn-value--busy { opacity: 1; }
+}
