@@ -122,17 +122,30 @@ VM (10 vCPU, 8 GB node limit); treat them as orders of magnitude.
    resident across requests on `celld dev` with the node still healthy. Work
    scheduled with `waitUntil` keeps running after the response and is not
    covered by the 1 s CPU cap (measured 12 s of work and +275 MB RSS after a
-   3 ms response), and a response body has no size or duration cap once headers
-   are sent. CPU is capped per request, not per site per second; the node is
-   finally bounded by `CELLD_MEM_LIMIT` (8 GB) and the container's disk. A few
-   hostile apps can pressure the node or make celld shed Durable Objects.
+   3 ms response); celld ends the turn at `CELLD_HANDLER_BUDGET_S` (default
+   300 s), which bounds wall clock, not work. A request body may be up to
+   `CELLD_MAX_REQUEST_BODY_BYTES` (default 1 GiB; neither the router nor
+   Traefik sets a smaller limit), and a response body has no size or duration
+   cap once headers are sent. CPU is capped per request, not per site per
+   second; the node is finally bounded by `CELLD_MEM_LIMIT` (8 GB) and the
+   container's disk. A few hostile apps can pressure the node or make celld
+   shed Durable Objects: `CELLD_MAX_RSS_MB` defaults to 80% of the container's
+   memory limit, a 95% absolute cap applies on top, and `CELLD_IDLE_EVICT_S`
+   is unset, so an idle cell stays resident until pressure removes it.
 2. **Storage is not quota'd by bytes.** Object count is capped atomically, but
    one object can write unlimited SQLite data (a single SQL value is 2 MB; one
-   object wrote 40 MB), and celld 0.6.3 never compacts Durable Object facet
-   write logs (~4-6 KB per write, and 1000 empty objects cost ~236 MB of disk).
-   A chatty app can fill the bucket. The only stop today is monitoring (the
-   dashboard) plus `DELETE /__admin/site`, which stops serving and deletes
-   data — a kill switch, not a quota.
+   object wrote 40 MB), and nothing reclaims a Durable Object facet's write log
+   (~4-6 KB per write, and 1000 empty objects cost ~236 MB of disk). Only epoch
+   GC deletes superseded cell data: `CELLD_LTX_RETENTION_SECS` (3600 here)
+   drops superseded epoch prefixes, but upstream says it **skips facet streams**
+   (`docs/README.md` at the v0.6.3 tag), so a facet keeps every write. Two
+   settings look like they would help and do not: L1 compaction is on by
+   default, but it only merges L0 objects into L1 objects so a takeover reads
+   fewer of them, and the compactor "creates a destination object but never
+   deletes a source"; `CELLD_LTX_TRUNCATE_PAGES` truncates the local WAL at a
+   checkpoint, not objects in the bucket. A chatty app can fill the bucket. The
+   only stop today is monitoring (the dashboard) plus `DELETE /__admin/site`,
+   which stops serving and deletes data — a kill switch, not a quota.
 3. **The deploy path is operator-trusted.** `tools/deploy.sh` runs
    `npm run build` on the host as the operator, so a third-party site's
    `postinstall` or build script is code execution on the VM. `tools/pack.ts`
@@ -157,6 +170,40 @@ VM (10 vCPU, 8 GB node limit); treat them as orders of magnitude.
    site-chosen and stored in plaintext in the index; `/__admin/overview`
    returns them to `READ_TOKEN`, and the LAN dashboard (behind a password) shows
    them. Do not put secrets or unnecessary user identifiers in object names.
+
+## Node-level limits and what they do not cover
+
+These celld settings change what the node does under load or under a bad app.
+None is a per-site budget, and none keeps hostile code out: they decide how the
+node degrades, not what a site may reach. Each is a policy for the whole node,
+so the smallest site pays for the largest app on it.
+
+Checked 2026-11-06 against the v0.6.3 source and `celld --help` in the pinned
+image. celld.dev still publishes the v0.6.2 pages, which mention only
+`CELLD_MAX_REQUEST_BODY_BYTES` and `CELLD_TRUST_FORWARDED_HEADERS`; the numbers
+below come from the code.
+
+| Variable | Default | What it changes |
+| --- | --- | --- |
+| `CELLD_MAX_RSS_MB` | 80% of the container memory limit | Sheds the least recently used idle cells when the allocator-adjusted RSS or the active cgroup working set crosses it. A separate cap at 95% protects kernel charges that shedding cannot return. `0` disables both. |
+| `CELLD_MAX_RESIDENT_CELLS` | unset, no documented default | Hard cap on resident cells, enforced at admission. At the cap a request waits `CELLD_ADMISSION_WAIT_MS` (1 s) for a slot and then fails; under memory pressure it fails at once. |
+| `CELLD_IDLE_EVICT_S` | unset | Hibernates a cell that has been idle this long. Unset, only pressure or the residency cap takes an idle cell out of memory. |
+| `CELLD_MAX_CELL_REQUESTS` | 64 | Concurrent fetches into one cell. |
+| `CELLD_HANDLER_BUDGET_S` | 300 | Wall clock for one JavaScript handler run, `waitUntil` work included. |
+| `CELLD_FETCH_TIMEOUT_S` | 120 | One outbound fetch, including through `SiteEgress`. |
+| `CELLD_MAX_REQUEST_BODY_BYTES` | 1 GiB | Ingress body limit on the public listener and `/do/<ID>`. The only body cap in this stack. |
+| `CELLD_MAX_ASSET_FILE_BYTES` | 25 MiB | One file in a deployed bundle. |
+| `CELLD_LOCAL_CACHE_MAX_BYTES` | 2 GiB | Hibernated SQLite cache on the node's disk. |
+
+Not in the table because they are per site and live in the router: `SITE_MAX_*`
+cover requests, objects and subrequests, and they cannot see Durable Object
+writes or isolate memory.
+
+What still has no limit: bytes per site or per object, memory per site, and CPU
+per site per second. Lowering `CELLD_MAX_RSS_MB`, `CELLD_MAX_RESIDENT_CELLS`
+and `CELLD_HANDLER_BUDGET_S` makes the node degrade earlier and more
+predictably under a bad app; it does not make the app safe. A second node with
+its own bucket remains the only real separation.
 
 ## Proxy-only sites (Hamstr crumbs)
 
@@ -248,8 +295,11 @@ risk; they do not make the node a hostile-app sandbox:
   roughly ten times the value.
 - Watch node memory too: ArrayBuffers and `waitUntil` work are not covered by
   the V8 heap limit or the per-request CPU cap. If an app does not need
-  background work, treat `waitUntil` as a risk in review; a per-site memory
-  budget would need cgroup-per-node isolation.
+  background work, treat `waitUntil` as a risk in review and lower
+  `CELLD_HANDLER_BUDGET_S`; set `CELLD_IDLE_EVICT_S` and
+  `CELLD_MAX_RESIDENT_CELLS` so the node degrades on a schedule instead of at
+  random (see "Node-level limits"). A per-site memory budget would need
+  cgroup-per-node isolation.
 - Treat the admin token as root of the platform: a control plane that holds it
   must authenticate publishers and scope what they can deploy. Prefer a separate
   celld node (own bucket, own process) per trust tier over one node for

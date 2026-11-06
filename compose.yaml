@@ -100,6 +100,15 @@ services:
       # tip it over, and an isolate over the limit stops materializing result
       # sets ("the isolate is over its V8 heap limit").
       CELLD_V8_HEAP_LIMIT_MB: ${CELLD_V8_HEAP_LIMIT_MB:-256}
+      # Node-level caps; see docs/SECURITY.md, "Node-level limits". Uncomment to
+      # bound the whole node: hibernate cells idle this many seconds, refuse
+      # activations above a resident count (a request waits 1 s, then fails),
+      # and end a handler run (waitUntil included) after this many seconds.
+      # CELLD_IDLE_EVICT_S: 1800
+      # CELLD_MAX_RESIDENT_CELLS: 64
+      # CELLD_HANDLER_BUDGET_S: 60
+      # Ingress body cap on the public listener (celld's default is 1 GiB).
+      # CELLD_MAX_REQUEST_BODY_BYTES: 33554432
       # Hamstr crumbs (sites named crumb-*) answer only requests that carry this
       # token, i.e. only the Hamstr proxy. Empty: crumb sites answer nobody.
       PROXY_TOKEN: ${HAMSTR_PROXY_TOKEN:-}
@@ -108,8 +117,10 @@ services:
     volumes:
       - celld-state:/var/lib/celld
     # Each loaded site isolate stays resident; an EmDash site takes ~120 MB
-    # (tools/deploy-emdash.sh), small sites a few MB. celld sheds Durable Objects
-    # at 80% of this limit.
+    # (tools/deploy-emdash.sh), small sites a few MB. celld sheds idle cells
+    # when the greater of RSS and the cgroup working set passes 80% of this
+    # limit, with a hard cap at 95% on top (CELLD_MAX_RSS_MB changes the
+    # threshold, 0 disables both).
     mem_limit: ${CELLD_MEM_LIMIT:-8g}
     # celld drains for up to 40 s (CELLD_SHUTDOWN_TOTAL_MS) before it exits.
     stop_grace_period: 50s
