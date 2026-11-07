@@ -23,7 +23,7 @@ export const POST = guard(async (event) => {
 		return json(c, 200, { ok: true });
 	}
 	if (action === "restore") {
-		c.db.prepare("UPDATE crumbs SET trashed_at = NULL WHERE id = ?").run(crumb.id);
+		c.untrashCrumb(crumb);
 		return json(c, 200, { ok: true });
 	}
 	if (action === "reset") {

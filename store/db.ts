@@ -280,6 +280,12 @@ const MIGRATIONS: string[] = [
 	CREATE INDEX apps_search ON apps USING gin (search);
 	CREATE INDEX apps_title_trgm ON apps USING gin (lower(name || ' ' || summary) gin_trgm_ops);
 	`,
+	// The owner withdrew this release (yank). A moderator may still reject it
+	// afterwards, but reversing that rejection must not bring it back.
+	`
+	ALTER TABLE releases ADD COLUMN yanked_at timestamptz;
+	UPDATE releases SET yanked_at = COALESCE(reviewed_at, created_at) WHERE status = 'yanked';
+	`,
 ];
 
 export async function migrate(db: Db): Promise<void> {

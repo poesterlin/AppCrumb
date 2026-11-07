@@ -130,6 +130,12 @@ export function createChecker({ db, blobsDir, policy: over = {}, classifier = nu
 	/** Apply the policy inside the transaction: reject, publish or leave it for
 	 *  a person. Returns what was done. */
 	async function applyPolicy(sql: Sql, row: any, verdict: string): Promise<string | null> {
+		// The checks can take minutes (the classifier is a network call). If a
+		// person decided meanwhile, their decision stands: the verdict is
+		// recorded, but nothing is published or rejected on a stale reading.
+		const now = await sql.one("SELECT status, reviewed_at FROM releases WHERE id = $1 FOR UPDATE", [row.id]);
+		const same = (a: unknown, b: unknown) => (a ? new Date(a as string).getTime() : null) === (b ? new Date(b as string).getTime() : null);
+		if (!now || now.status !== row.status || !same(now.reviewed_at, row.reviewed_at)) return null;
 		if (verdict === "block" && policy.autoBlock) {
 			// The publisher hears that, not which rule fired: the details are for
 			// moderators, not a guide to slipping past the checks.
@@ -137,12 +143,39 @@ export function createChecker({ db, blobsDir, policy: over = {}, classifier = nu
 			return (await rejectRelease(sql, row.id, { by: "checks", note })) ? "rejected" : null;
 		}
 		if (verdict === "allow" && row.status === "pending" && (policy.autoApprove || (row.trusted && policy.autoApproveTrusted))) {
-			return (await publishRelease(sql, row.id, { by: "checks", note: row.trusted ? "trusted publisher, low risk" : "low risk" })) ? "published" : null;
+			return (await publishRelease(sql, row.id, { by: "checks", note: row.trusted ? "trusted publisher, low risk" : "low risk" }, ["pending"])) ? "published" : null;
 		}
 		return null;
 	}
 
-	async function checkOne(releaseId: number): Promise<void> {
+	/** Why a release is blocked: each finding at or over the block threshold, and the classifier if it is. */
+	function blockersOf(findings: Finding[], classification: Classification | null): string[] {
+		const blockers = findings.filter((f) => f.risk >= policy.blockAt).map((f) => f.title);
+		if (classification && classifierRisk(classification) >= policy.blockAt) blockers.push(`the classifier rated it ${classification.kind.choice.replace(/_/g, " ") || "harmful"}`);
+		return blockers;
+	}
+
+	interface Outcome { verdict: string; risk: number; findings: Finding[]; classification: Classification | null; classifierError: string | null; blockers: string[] }
+
+	/** Writes a finished check and applies the policy, in one transaction. Returns
+	 *  the action taken (null: none), or undefined when a recheck has replaced this
+	 *  run's claim: its results, and its auto-actions, are then stale and belong to nobody. */
+	function recordResult(row: any, claim: string, o: Outcome): Promise<string | null | undefined> {
+		const target = `${row.slug}@${row.version}`;
+		return db.tx(async (sql) => {
+			if (!(await sql.one("SELECT 1 FROM moderation_checks WHERE release_id = $1 AND started_at::text = $2 FOR UPDATE", [row.id, claim]))) return undefined;
+			const done = await applyPolicy(sql, row, o.verdict);
+			const classifier = o.classification || o.classifierError ? JSON.stringify(o.classification ?? { error: o.classifierError }) : null;
+			await sql.run(
+				"UPDATE moderation_checks SET status = 'done', finished_at = now(), verdict = $2, risk = $3, findings = $4::jsonb, classifier = $5::jsonb, action = $6, error = $7 WHERE release_id = $1 AND started_at::text = $8",
+				[row.id, o.verdict, o.risk, JSON.stringify(o.findings), classifier, done, o.classifierError, claim],
+			);
+			await logEvent(sql, "checks", "release.check", target, `${o.verdict} (risk ${o.risk.toFixed(2)})${done ? `, ${done}` : ""}${o.blockers.length ? `: ${o.blockers.join("; ")}` : ""}`);
+			return done;
+		});
+	}
+
+	async function checkOne(releaseId: number, claim: string): Promise<void> {
 		const row = await db.one(
 			`SELECT r.*, a.ref AS slug, p.id AS publisher_id, p.name AS publisher, p.trusted, p.created_at AS publisher_created, p.password_changed_at,
 				(SELECT count(*)::int FROM apps x WHERE x.publisher_id = p.id) AS publisher_apps
@@ -155,7 +188,7 @@ export function createChecker({ db, blobsDir, policy: over = {}, classifier = nu
 		try {
 			result = await analyze(row);
 		} catch (err) {
-			await db.run("UPDATE moderation_checks SET status = 'error', finished_at = now(), verdict = 'review', error = $2 WHERE release_id = $1", [releaseId, String(err.message ?? err)]);
+			await db.run("UPDATE moderation_checks SET status = 'error', finished_at = now(), verdict = 'review', error = $2 WHERE release_id = $1 AND started_at::text = $3", [releaseId, String(err.message ?? err), claim]);
 			log(`moderation: checking ${target} failed: ${err.message}`);
 			return;
 		}
@@ -164,18 +197,10 @@ export function createChecker({ db, blobsDir, policy: over = {}, classifier = nu
 		const ruleRisk = findings.reduce((m, f) => Math.max(m, f.risk), 0);
 		const risk = Math.max(ruleRisk, classification ? classifierRisk(classification) : 0);
 		const verdict = verdictOf(risk, policy);
-		const blockers = findings.filter((f) => f.risk >= policy.blockAt).map((f) => f.title);
-		if (classification && classifierRisk(classification) >= policy.blockAt) blockers.push(`the classifier rated it ${classification.kind.choice.replace(/_/g, " ") || "harmful"}`);
+		const blockers = blockersOf(findings, classification);
 
-		const action = await db.tx(async (sql) => {
-			const done = await applyPolicy(sql, row, verdict);
-			await sql.run(
-				"UPDATE moderation_checks SET status = 'done', finished_at = now(), verdict = $2, risk = $3, findings = $4::jsonb, classifier = $5::jsonb, action = $6, error = $7 WHERE release_id = $1",
-				[releaseId, verdict, risk, JSON.stringify(findings), classification || classifierError ? JSON.stringify(classification ?? { error: classifierError }) : null, done, classifierError],
-			);
-			await logEvent(sql, "checks", "release.check", target, `${verdict} (risk ${risk.toFixed(2)})${done ? `, ${done}` : ""}${blockers.length ? `: ${blockers.join("; ")}` : ""}`);
-			return done;
-		});
+		const action = await recordResult(row, claim, { verdict, risk, findings, classification, classifierError, blockers });
+		if (action === undefined) return log(`moderation: ${target}: a newer check replaced this one; its result is dropped`);
 		log(`moderation: ${target} → ${verdict} (risk ${risk.toFixed(2)})${action ? `, ${action}` : ""}`);
 	}
 
@@ -191,9 +216,9 @@ export function createChecker({ db, blobsDir, policy: over = {}, classifier = nu
 		);
 		let checked = 0;
 		for (const { id } of due) {
-			const claimed = await db.one("INSERT INTO moderation_checks (release_id, status, started_at) VALUES ($1, 'running', now()) ON CONFLICT DO NOTHING RETURNING release_id", [id]);
+			const claimed = await db.one("INSERT INTO moderation_checks (release_id, status, started_at) VALUES ($1, 'running', now()) ON CONFLICT DO NOTHING RETURNING started_at::text AS claim", [id]);
 			if (!claimed) continue;
-			await checkOne(id);
+			await checkOne(id, claimed.claim);
 			checked++;
 		}
 		return checked;

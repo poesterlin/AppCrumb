@@ -19,5 +19,13 @@ export async function alias(request, env, url) {
 	if ((await env.CODE.get(`site:${host}`)) !== null) return fail(409, `${host} is a site of its own; it would be hidden`);
 	await env.CODE.put(`alias:${host}`, site);
 	aliasCache.delete(host);
+	// The site may have been deleted between the check above and the write (DELETE
+	// /site lists aliases once, then removes the site's data): never leave an alias
+	// to a site that is gone.
+	if ((await env.CODE.get(`site:${site}`)) === null) {
+		await env.CODE.delete(`alias:${host}`);
+		aliasCache.delete(host);
+		return fail(404, `no site ${site}`);
+	}
 	return json({ host, site });
 }

@@ -32,6 +32,8 @@ export interface MockCelld {
 	failCheck: boolean;
 	failRestore: string | null;
 	failActivate: string | null;
+	/** Called with each admin call's path and query; an answer holds that call until it resolves. */
+	gate: ((path: string, query: Record<string, string>) => Promise<unknown> | undefined) | null;
 	port: number;
 	api: string;
 	close(): Promise<void>;
@@ -118,7 +120,7 @@ export async function mockIdp({ clientId = "hamstr-test", clientSecret = "s3cret
 
 /** A celld stand-in: records admin calls, answers them, and echoes crumb requests. */
 export async function mockCelld({ adminToken = "admin-token", proxyToken = "proxy-token" }: { adminToken?: string; proxyToken?: string } = {}): Promise<MockCelld> {
-	const node: any = { adminToken, proxyToken, calls: [], sites: new Map(), failCheck: false, data: new Map(), failRestore: null, failActivate: null };
+	const node: any = { adminToken, proxyToken, calls: [], sites: new Map(), failCheck: false, data: new Map(), failRestore: null, failActivate: null, gate: null };
 	const server = createServer(async (req, res) => {
 		const chunks: Buffer[] = [];
 		for await (const chunk of req) chunks.push(chunk);
@@ -129,6 +131,7 @@ export async function mockCelld({ adminToken = "admin-token", proxyToken = "prox
 			if (req.headers.authorization !== `Bearer ${adminToken}`) return send(401, { error: "token" });
 			const path = url.pathname.replace(/^\/__admin/, "");
 			node.calls.push({ method: req.method, path, query: Object.fromEntries(url.searchParams), body: body.toString() });
+			await node.gate?.(path, Object.fromEntries(url.searchParams));
 			if (path === "/blobs/missing") return send(200, { missing: JSON.parse(body.toString()) });
 			// Backups: a crumb's "data" is one string, dumped and restored as JSON lines.
 			if (path === "/dump") {

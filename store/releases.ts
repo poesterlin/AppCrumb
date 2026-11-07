@@ -25,15 +25,22 @@ export async function setTags(sql: Sql, appId: number, tags: string[]): Promise<
 /** Puts a release in the catalog. Its manifest becomes the app's listing (name,
  *  summary, icon, tags, …) only now: a release waiting for review never changes
  *  what the catalog shows. `review` records who approved it. */
-export async function publishRelease(sql: Sql, releaseId: number, review?: { by: string; note?: string | null }): Promise<boolean> {
+export async function publishRelease(
+	sql: Sql,
+	releaseId: number,
+	review?: { by: string; note?: string | null },
+	/** The states the release may be published from (a moderator may also reverse a rejection). */
+	from: readonly string[] = ["pending", "rejected"],
+): Promise<boolean> {
 	const row = await sql.one(
 		`UPDATE releases SET status = 'published', published_at = now(),
 			reviewed_at = CASE WHEN $2::text IS NULL THEN reviewed_at ELSE now() END,
 			reviewed_by = COALESCE($2::text, reviewed_by),
 			review_note = CASE WHEN $2::text IS NULL THEN review_note ELSE $3::text END
-		 WHERE id = $1 AND bundle_sha IS NOT NULL AND status IN ('pending', 'rejected')
+		 WHERE id = $1 AND bundle_sha IS NOT NULL AND status = ANY($4::text[])
+		   AND (status <> 'rejected' OR yanked_at IS NULL)
 		 RETURNING app_id, manifest`,
-		[releaseId, review?.by ?? null, review?.note ?? null],
+		[releaseId, review?.by ?? null, review?.note ?? null, [...from]],
 	);
 	if (!row) return false;
 	const m = row.manifest;
@@ -98,4 +105,24 @@ export async function writeSetting(sql: Sql, key: keyof StoreSettings, value: bo
 		[key, JSON.stringify(value), by],
 	);
 	await logEvent(sql, by, "settings.change", key, value ? "on" : "off");
+}
+
+// --- owner operations ---------------------------------------------------------------
+// Each one is a compare-and-set on the status the caller's rules allow: the
+// caller read the row a moment earlier, and a moderator (or another request) may
+// have moved it since. A refused change returns false and leaves the row alone.
+
+/** The publisher withdraws a release that is live or waiting for review. */
+export async function yankRelease(sql: Sql, releaseId: number): Promise<boolean> {
+	return (await sql.run("UPDATE releases SET status = 'yanked', yanked_at = now() WHERE id = $1 AND status IN ('published', 'pending')", [releaseId])) > 0;
+}
+
+/** Versions are immutable: a release that ever had a bundle is never deleted,
+ *  only emptied (status "removed", hashes kept), so the version can never be
+ *  published again with other content. A release whose upload never finished
+ *  held nothing and is deleted outright. A rejected release stays as the
+ *  moderators left it (they may reverse it), so it is refused here. */
+export async function removeRelease(sql: Sql, row: { id: number; bundle_sha: string | null; source_sha: string | null }): Promise<boolean> {
+	if (!row.bundle_sha && !row.source_sha) return (await sql.run("DELETE FROM releases WHERE id = $1 AND status <> 'rejected'", [row.id])) > 0;
+	return (await sql.run("UPDATE releases SET status = 'removed' WHERE id = $1 AND status <> 'rejected'", [row.id])) > 0;
 }

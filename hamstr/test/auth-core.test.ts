@@ -239,3 +239,21 @@ test("groups: names are validated and unique; members can be set", () => {
 	core.deleteGroup(owner.user.id, gid);
 	assert.equal(core.groupsList().length, 0);
 });
+
+test("starting many sign-ins does not end the ones in progress", async () => {
+	const idp = await mockIssuer("c", "s");
+	try {
+		const core = createCore({ origin: ORIGIN, key: KEY, secret: KEY, dbPath: ":memory:", maxFlows: 10 });
+		const pid = core.saveProvider("t", { kind: "oidc", name: "Mock", issuer: idp.issuer, clientId: "c", clientSecret: "s" });
+		for (let i = 0; i < 8; i++) await core.begin(pid, {});
+		const victim = new URL(await core.begin(pid, { req: "R" }));
+		// Anyone can start flows. Past the cap the oldest go, not everybody's.
+		for (let i = 0; i < 5; i++) await core.begin(pid, {});
+		idp.nonce = victim.searchParams.get("nonce");
+		const out: any = await core.complete(pid, new URLSearchParams({ state: victim.searchParams.get("state")!, code: "code" }));
+		assert.equal(out.kind, "signed-in");
+		assert.equal(out.req, "R");
+	} finally {
+		await idp.close();
+	}
+});

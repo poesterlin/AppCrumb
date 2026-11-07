@@ -45,13 +45,20 @@ const cookieName = (request) => (secureCookies(request) ? `__Host-${AUTH_COOKIE}
 const cookieLine = (request, value, maxAge) =>
 	`${cookieName(request)}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureCookies(request) ? "; Secure" : ""}`;
 
-/** Handoff tokens are single use: a link in a history or a log cannot sign anyone in again. */
+/** Handoff tokens are single use: a link in a history or a log cannot sign anyone in again.
+ *  Spent ids are remembered in KV (so every isolate and a restart agree) until the token
+ *  would have expired anyway, and in memory (so a replay in this isolate costs no KV read).
+ *  KV is eventually consistent, so two near-simultaneous replays in different isolates can
+ *  still both pass; a later one cannot. */
 const usedHandoffs = new Map(); // jti -> exp
-function spendHandoff(jti, exp) {
+async function spendHandoff(env, jti, exp) {
 	const now = Date.now() / 1000;
 	for (const [id, until] of usedHandoffs) if (until <= now) usedHandoffs.delete(id);
-	if (typeof jti !== "string" || !jti || usedHandoffs.has(jti)) return false;
+	if (typeof jti !== "string" || !jti || jti.length > 200 || usedHandoffs.has(jti)) return false;
 	usedHandoffs.set(jti, exp);
+	const key = `handoff:${jti}`;
+	if ((await env.CODE.get(key)) !== null) return false;
+	await env.CODE.put(key, "", { expirationTtl: Math.max(60, Math.ceil(exp - now) + 5) });
 	return true;
 }
 
@@ -121,7 +128,7 @@ const publicUser = (t) => ({
 async function authCallback(request, env, url) {
 	const host = url.hostname;
 	const handoff = await verifyTok(env.AUTH_KEY, url.searchParams.get("token"), "handoff", host);
-	if (!handoff || !spendHandoff(handoff.jti, handoff.exp)) {
+	if (!handoff || !(await spendHandoff(env, handoff.jti, handoff.exp))) {
 		return plain(400, "That sign-in link is invalid or has expired. Open the site again to sign in.");
 	}
 	const { typ, aud, exp, jti, ...claims } = handoff;

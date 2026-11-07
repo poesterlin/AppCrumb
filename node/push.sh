@@ -9,7 +9,8 @@
 #  3. activate it for the hostname's site;
 #  4. watch (default 10 s): probe the check path on the live site every 2 s. On a
 #     5xx (e.g. a migration that fails on real data) the previous version is
-#     activated again and the deploy fails. Data a new version already changed is
+#     activated again and the deploy fails (unless another deploy went live in the
+#     meantime: that one is left alone). Data a new version already changed is
 #     not rolled back.
 # --if-new leaves a site that already has an active version alone (the answer then
 # has "skipped": true) and skips check and watch. Runs inside the celld container,
@@ -86,7 +87,12 @@ while [ "$i" -lt "$watch" ]; do
 	[1-4]??) continue ;;
 	esac
 	log "live probe of $path answered ${code:-no response}: $(head -c 300 "$work/probe" 2>/dev/null || true)"
-	if [ -n "$previous" ]; then
+	# Another deploy may have gone live since ours: rolling back would throw its
+	# version away, and the failure may be its own. (Unknown: roll back as before.)
+	live=$(call "$api/overview" 2>/dev/null | tr '{' '\n' | grep -F "\"id\":\"$host\"" | field version || true)
+	if [ -n "$live" ] && [ "$live" != "$version" ]; then
+		log "the live site failed, but version $live was activated after $version (superseded); not rolling back over it"
+	elif [ -n "$previous" ]; then
 		call -X POST "$api/activate?host=$host&version=$previous" >/dev/null
 		log "rolled back to $previous; version $version stays uploaded"
 	else

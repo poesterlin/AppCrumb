@@ -19,13 +19,17 @@ function fakeAnswer(pathname: string, body: string): [number, string] {
 	if (pathname === "/__admin/check") return [200, JSON.stringify({ ok: true, status: 200, ms: 1, path: "/" })];
 	return PLAIN_OK.has(pathname) ? [200, "{}"] : [404, "{}"];
 }
+// Runs while the fake node handles an activation: the moment a slow deploy can be overtaken.
+let onActivate: (() => Promise<void>) | null = null;
 const fake = createServer((req, res) => {
 	let body = "";
 	req.on("data", (chunk) => (body += chunk));
-	req.on("end", () => {
+	req.on("end", async () => {
 		events.push({ method: req.method, url: req.url, body });
+		const pathname = new URL(req.url, "http://fake").pathname;
+		if (pathname === "/__admin/activate") await onActivate?.();
 		res.setHeader("content-type", "application/json");
-		const [status, payload] = fakeAnswer(new URL(req.url, "http://fake").pathname, body);
+		const [status, payload] = fakeAnswer(pathname, body);
 		res.statusCode = status;
 		res.end(payload);
 	});
@@ -133,5 +137,21 @@ describe("demo sessions", () => {
 		assert.equal(detail.body.demo.available, false);
 		assert.match(detail.body.demo.reason, /network/);
 		assert.equal((await call(store.base, "/api/v1/apps/demo/net/demo", { method: "POST", json: {} })).status, 409);
+	});
+	it("does not bring an expired demo back to life when its deploy finishes late", async () => {
+		// The cleanup sweep expires the row (and deletes the site) while the deploy is still running.
+		onActivate = async () => {
+			await store.db.run("UPDATE demos SET status = 'expired' WHERE status = 'starting'");
+		};
+		events.length = 0;
+		let created;
+		try {
+			created = await call(store.base, "/api/v1/apps/demo/hello/demo", { method: "POST", json: {} });
+		} finally {
+			onActivate = null;
+		}
+		assert.notEqual(created.status, 201, created.text);
+		assert.equal((await store.db.query("SELECT 1 FROM demos WHERE status = 'running'")).length, 0, "no row claims a site that was removed");
+		assert.ok(events.some((e) => e.method === "DELETE" && e.url.startsWith("/__admin/site")), "the late site is removed again");
 	});
 });

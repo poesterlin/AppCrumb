@@ -25,6 +25,9 @@ const MAX_CRUMBS_PER_USER = 500;
 /** Largest backup Hamstr accepts for a restore or an import. */
 const MAX_BACKUP_BYTES = 1024 * 1024 * 1024;
 const BACKUP_EXTENSION = "hamstr-backup";
+/** The `user_version` this build writes and knows how to read. Bump it with
+ *  every schema change: an older build must refuse data a newer one wrote. */
+const SCHEMA_VERSION = 2;
 
 /** -1, 0 or 1 as semver a is older, the same or newer than b (pre-releases
  *  sort before their release). */
@@ -192,6 +195,12 @@ export function createCore(options: CoreOptions = {}) {
 	// --- database ----------------------------------------------------------------
 	const db = new DatabaseSync(join(config.dataDir, "hamstr.db"));
 	db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+	// A newer Hamstr may have added columns this build does not know. Starting
+	// would run queries against them, so refuse to boot until it is upgraded.
+	{
+		const version = Number(db.prepare("PRAGMA user_version").get()?.user_version ?? 0);
+		if (version > SCHEMA_VERSION) throw new Error(`hamstr.db is at schema ${version}, this build knows ${SCHEMA_VERSION}: refusing to start on newer data`);
+	}
 	// Grains → crumbs (tables/columns). Before CREATE, so we do not end up with
 	// an empty crumbs table beside a leftover grains one.
 	{
@@ -479,6 +488,10 @@ export function createCore(options: CoreOptions = {}) {
 	 *  name, so one Hamstr holds one app of each name. Updates use the store the
 	 *  app was installed from when that store is still registered. */
 	const installing = new Map();
+	/** Local app names being installed or updated right now. `installing` is keyed
+	 *  by the store's id, but the local name is what rows, crumbs and uninstall
+	 *  go by: two ids can map to one name, and uninstall only knows the name. */
+	const installingSlugs = new Set<string>();
 	async function install(id, { version, allowEgress, user }) {
 		if (installing.has(id)) throw new HttpError(409, `${id} is already being installed`);
 		const job = (async () => {
@@ -499,55 +512,13 @@ export function createCore(options: CoreOptions = {}) {
 			}
 			if (manifest.slug !== storeId.split("/").pop()) throw new HttpError(422, "the release manifest is for another app");
 			const slug = manifest.slug;
-			const existing = q.app.get(slug);
-			if (existing) {
-				const owner = existing.store_id ?? (await legacyStoreId(slug));
-				if (owner !== storeId) {
-					throw new HttpError(409, `this Hamstr already has an app called ${existing.name}${owner ? ` (${owner})` : ""}; remove it before getting ${storeId}`);
-				}
-			}
-			const oldEgress = existing ? (manifestOf(existing).egress ?? []) : [];
-			const newEgress = manifest.egress ?? [];
-			const oldDevices = existing ? (manifestOf(existing).devices ?? []) : [];
-			const newDevices = (manifest.devices ?? []).filter((d) => !oldDevices.includes(d));
-			// `allowEgress` is the admin's consent to everything the install dialog listed: hosts and devices.
-			if (newEgress.some((h) => !oldEgress.includes(h)) && !allowEgress) {
-				throw new HttpError(403, `${manifest.name} wants network access to ${newEgress.join(", ")}; review and allow it first`);
-			}
-			if (newDevices.length && !allowEgress) {
-				throw new HttpError(403, `${manifest.name} wants to use the ${newDevices.join(", ")}; review and allow it first`);
-			}
-			const { file, sha } = await downloadBundle(origin.url, storeId, release.version, release.bundleSha256, tmpDir);
-			let uploaded;
+			if (installingSlugs.has(slug)) throw new HttpError(409, `an app called ${slug} is already being installed or updated; wait for it to finish`);
+			installingSlugs.add(slug);
 			try {
-				uploaded = await celld.upload(file, { egress: newEgress, probeHost: `${config.crumbPrefix}probe-${randomId(8)}.${config.crumbDomain}` });
+				return await installRelease(origin, storeId, release, manifest, { allowEgress, user });
 			} finally {
-				rmSync(file, { force: true });
+				installingSlugs.delete(slug);
 			}
-			const stamp = now();
-			if (existing) {
-				db.prepare(
-					"UPDATE apps SET name = ?, icon = ?, summary = ?, version = ?, code_version = ?, bundle_sha = ?, manifest = ?, updated_at = ?, store_id = ?, source_store = ? WHERE slug = ?",
-				).run(manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), stamp, storeId, origin.id, slug);
-			} else {
-				db.prepare(
-					"INSERT INTO apps (slug, store_id, source_store, name, icon, summary, version, code_version, bundle_sha, manifest, installed_by, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				).run(slug, storeId, origin.id, manifest.name, manifest.icon, manifest.summary, manifest.version, uploaded.version, sha, JSON.stringify(manifest), user.id, stamp, stamp);
-			}
-			// Move existing crumbs. Their Durable Objects keep their data; migrations run on first use.
-			const failed = [];
-			let moved = 0;
-			for (const crumb of db.prepare("SELECT * FROM crumbs WHERE slug = ?").all(slug)) {
-				if (crumb.code_version === uploaded.version) continue;
-				try {
-					await celld.deployCrumb(crumbHost(crumb.id), uploaded.version, newEgress);
-					db.prepare("UPDATE crumbs SET code_version = ? WHERE id = ?").run(uploaded.version, crumb.id);
-					moved++;
-				} catch (err) {
-					failed.push({ id: crumb.id, error: err.message });
-				}
-			}
-			return { app: appJson(q.app.get(slug)), updatedCrumbs: moved, failedCrumbs: failed };
 		})();
 		installing.set(id, job);
 		try {
@@ -555,6 +526,70 @@ export function createCore(options: CoreOptions = {}) {
 		} finally {
 			installing.delete(id);
 		}
+	}
+	async function installRelease(origin, storeId, release, manifest, { allowEgress, user }) {
+		const slug = manifest.slug;
+		const existing = q.app.get(slug);
+		await checkInstallAllowed(existing, storeId, manifest, allowEgress);
+		const newEgress = manifest.egress ?? [];
+		const { file, sha } = await downloadBundle(origin.url, storeId, release.version, release.bundleSha256, tmpDir);
+		let uploaded;
+		try {
+			uploaded = await celld.upload(file, { egress: newEgress, probeHost: `${config.crumbPrefix}probe-${randomId(8)}.${config.crumbDomain}` });
+		} finally {
+			rmSync(file, { force: true });
+		}
+		saveApp(existing, origin, storeId, manifest, { codeVersion: uploaded.version, sha, user });
+		const { moved, failed } = await moveCrumbs(slug, uploaded.version, newEgress);
+		return { app: appJson(q.app.get(slug)), updatedCrumbs: moved, failedCrumbs: failed };
+	}
+	/** What an installed app already declares (hosts, devices), so only additions need consent. */
+	const declared = (app, key: "egress" | "devices"): string[] => (app ? manifestOf(app)[key] : null) ?? [];
+	/** Refuses an install that would replace another store's app of the same name,
+	 *  or grant network hosts or devices the admin did not consent to. */
+	async function checkInstallAllowed(existing, storeId, manifest, allowEgress) {
+		await checkOwner(existing, storeId);
+		// `allowEgress` is the admin's consent to everything the install dialog listed: hosts and devices.
+		if (allowEgress) return;
+		const hosts = (manifest.egress ?? []).filter((h) => !declared(existing, "egress").includes(h));
+		if (hosts.length) throw new HttpError(403, `${manifest.name} wants network access to ${(manifest.egress ?? []).join(", ")}; review and allow it first`);
+		const devices = (manifest.devices ?? []).filter((d) => !declared(existing, "devices").includes(d));
+		if (devices.length) throw new HttpError(403, `${manifest.name} wants to use the ${devices.join(", ")}; review and allow it first`);
+	}
+	async function checkOwner(existing, storeId) {
+		if (!existing) return;
+		const owner = existing.store_id ?? (await legacyStoreId(existing.slug));
+		if (owner === storeId) return;
+		throw new HttpError(409, `this Hamstr already has an app called ${existing.name}${owner ? ` (${owner})` : ""}; remove it before getting ${storeId}`);
+	}
+	function saveApp(existing, origin, storeId, manifest, { codeVersion, sha, user }) {
+		const stamp = now();
+		const manifestJson = JSON.stringify(manifest);
+		if (existing) {
+			db.prepare(
+				"UPDATE apps SET name = ?, icon = ?, summary = ?, version = ?, code_version = ?, bundle_sha = ?, manifest = ?, updated_at = ?, store_id = ?, source_store = ? WHERE slug = ?",
+			).run(manifest.name, manifest.icon, manifest.summary, manifest.version, codeVersion, sha, manifestJson, stamp, storeId, origin.id, manifest.slug);
+			return;
+		}
+		db.prepare(
+			"INSERT INTO apps (slug, store_id, source_store, name, icon, summary, version, code_version, bundle_sha, manifest, installed_by, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		).run(manifest.slug, storeId, origin.id, manifest.name, manifest.icon, manifest.summary, manifest.version, codeVersion, sha, manifestJson, user.id, stamp, stamp);
+	}
+	/** Move existing crumbs to the new code. Their Durable Objects keep their data; migrations run on first use. */
+	async function moveCrumbs(slug, codeVersion, egress) {
+		const failed = [];
+		let moved = 0;
+		for (const crumb of db.prepare("SELECT * FROM crumbs WHERE slug = ?").all(slug)) {
+			if (crumb.code_version === codeVersion) continue;
+			try {
+				await celld.deployCrumb(crumbHost(crumb.id), codeVersion, egress);
+				db.prepare("UPDATE crumbs SET code_version = ? WHERE id = ?").run(codeVersion, crumb.id);
+				moved++;
+			} catch (err) {
+				failed.push({ id: crumb.id, error: err.message });
+			}
+		}
+		return { moved, failed };
 	}
 
 	/** A new crumb of an installed app, as its own celld site. */
@@ -565,14 +600,41 @@ export function createCore(options: CoreOptions = {}) {
 			throw new HttpError(403, `you can have at most ${MAX_CRUMBS_PER_USER} crumbs`);
 		}
 		const id = randomId(12);
+		const host = crumbHost(id);
+		const single = (a) => manifestOf(a)?.instances === "single";
+		const taken = (a) => Boolean(db.prepare("SELECT 1 FROM crumbs WHERE owner_id = ? AND slug = ? AND trashed_at IS NULL").get(user.id, a.slug));
+		if (single(app) && taken(app)) throw new HttpError(409, `${app.name} is one per person, and you already have yours`);
+		// The app can change while the site is being made (an update moves every
+		// crumb it knows of to new code, but not one that is not saved yet; an
+		// uninstall may remove the app). The row is only saved, in the same
+		// synchronous step, once the app is still the one the site was made from.
+		let current = app;
+		let version = String(app.code_version);
+		let settled = false;
 		try {
-			await celld.deployCrumb(crumbHost(id), app.code_version, manifestOf(app).egress ?? []);
+			for (let attempt = 0; attempt < 5 && !settled; attempt++) {
+				await celld.deployCrumb(host, version, manifestOf(current).egress ?? []);
+				const latest = q.app.get(app.slug);
+				if (!latest) throw new HttpError(409, `${app.name} was uninstalled while the item was being made`);
+				current = latest;
+				if (single(latest) && taken(latest)) throw new HttpError(409, `${app.name} is one per person, and you already have yours`);
+				if (String(latest.code_version) === version) {
+					// The limit was checked before the awaits above; check it again where it counts.
+					if (Number(db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE owner_id = ?").get(user.id)?.n ?? 0) >= MAX_CRUMBS_PER_USER) {
+						throw new HttpError(403, `you can have at most ${MAX_CRUMBS_PER_USER} crumbs`);
+					}
+					const name = String(title).trim().slice(0, 80) || (single(latest) ? latest.name : `Untitled ${latest.name}`);
+					db.prepare("INSERT INTO crumbs (id, slug, title, owner_id, code_version, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, latest.slug, name, user.id, version, now());
+					settled = true;
+				} else {
+					version = String(latest.code_version);
+				}
+			}
+			if (!settled) throw new HttpError(409, `${app.name} kept changing while the item was being made; try again`);
 		} catch (err) {
-			await celld.deleteSite(crumbHost(id)).catch(() => {});
+			await celld.deleteSite(host).catch(() => {});
 			throw err;
 		}
-		const name = String(title).trim().slice(0, 80) || (manifestOf(app).instances === "single" ? app.name : `Untitled ${app.name}`);
-		db.prepare("INSERT INTO crumbs (id, slug, title, owner_id, code_version, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, app.slug, name, user.id, app.code_version, now());
 		return q.crumb.get(id);
 	}
 
@@ -752,7 +814,21 @@ export function createCore(options: CoreOptions = {}) {
 		}
 	}
 
+	/** Brings a crumb back from the trash. An app that is one per person keeps to
+	 *  that: it does not come back beside the one made since. */
+	function untrashCrumb(crumb) {
+		const app = q.app.get(crumb.slug);
+		if (app && manifestOf(app).instances === "single") {
+			const other = db.prepare("SELECT 1 FROM crumbs WHERE owner_id = ? AND slug = ? AND trashed_at IS NULL AND id != ?").get(crumb.owner_id, crumb.slug, crumb.id);
+			if (other) throw new HttpError(409, `${app.name} is one per person, and you already have a live one; delete or trash that one first`);
+		}
+		db.prepare("UPDATE crumbs SET trashed_at = NULL WHERE id = ?").run(crumb.id);
+	}
+
 	async function purgeCrumb(crumb) {
+		// A restore or reset is rewriting this item's site: deleting it now would
+		// leave the operation to recreate a site nothing points at.
+		if (restoring.has(crumb.id)) throw new HttpError(409, "this item is being restored or reset right now; try again in a moment");
 		await celld.deleteSite(crumbHost(crumb.id));
 		db.prepare("DELETE FROM crumbs WHERE id = ?").run(crumb.id);
 		portHooks.close(crumb.id);
@@ -773,7 +849,7 @@ export function createCore(options: CoreOptions = {}) {
 	async function uninstall(slug, { deleteItems = false } = {}) {
 		const app = q.app.get(slug);
 		if (!app) throw new HttpError(404, "that app is not installed");
-		if (installing.has(slug)) throw new HttpError(409, `${app.name} is being installed or updated right now`);
+		if (installing.has(slug) || installingSlugs.has(slug)) throw new HttpError(409, `${app.name} is being installed or updated right now`);
 		const crumbs = db.prepare("SELECT * FROM crumbs WHERE slug = ?").all(slug);
 		if (crumbs.length && !deleteItems) {
 			throw new HttpError(409, `${app.name} still has ${crumbs.length} item${crumbs.length === 1 ? "" : "s"} (including the trash)`);
@@ -961,6 +1037,7 @@ export function createCore(options: CoreOptions = {}) {
 		createCrumb,
 		openApp,
 		purgeCrumb,
+		untrashCrumb,
 		usage,
 		uninstall,
 		issueTicket,

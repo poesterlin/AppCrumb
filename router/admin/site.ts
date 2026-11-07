@@ -31,6 +31,14 @@ export async function deleteSite(env, url) {
 		aliasCache.delete(k.slice(6));
 	}
 	aliasCache.delete(id);
+	// An alias created while this ran (PUT /alias checks the site, then writes):
+	// look once more now that the site is gone.
+	for (const k of await listAll(env.CODE, "alias:")) {
+		if ((await env.CODE.get(k.name)) !== id) continue;
+		await env.CODE.delete(k.name);
+		aliasCache.delete(k.name.slice(6));
+		aliasKeys.push(k.name);
+	}
 	const objects = [];
 	const errors = [];
 	for (const k of await listAll(env.CODE, `obj:${id}|`)) {

@@ -111,13 +111,38 @@ async function readEntries(tgz) {
 	return { version, code, blobs };
 }
 
+/** The version `host` serves now, or null when the node does not say. */
+async function liveVersion(client, host): Promise<string | null> {
+	try {
+		const res = await client.admin("GET", "/overview");
+		if (res.status !== 200) return null;
+		const site = (JSON.parse(res.text).sites ?? []).find((s) => s.id === host);
+		return typeof site?.version === "string" ? site.version : null;
+	} catch {
+		return null;
+	}
+}
+
+/** The live site failed: put `previous` back, unless another deploy has gone live
+ *  since ours (rolling back would throw its version away, and the failure may be
+ *  its own). Always throws. */
+async function rollBack(client, host, version, previous): Promise<never> {
+	if (!previous) throw new Error(`the new version failed on live data and there is no previous version; ${version} stays active`);
+	const live = await liveVersion(client, host);
+	if (live !== null && live !== version) {
+		throw new Error(`the live site failed, but version ${live} was activated after ${version} (superseded); not rolling back over it`);
+	}
+	await ok(client.admin("POST", `/activate?${new URLSearchParams({ host, version: previous })}`), "rolling back");
+	throw new Error(`the new version failed on live data; rolled back to ${previous} (version ${version} stays uploaded)`);
+}
+
 const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 
 /**
  * Deploy a bundle to `host` through `client` (see adminClient). Resolves the
  * activation result; throws (after rolling back, when it can) on failure.
  */
-export async function deploy(client, tgz, host, { watch = 10, check = true, log = (line) => console.error(`deploy: ${line}`) } = {}) {
+export async function deploy(client, tgz, host, { watch = 10, check = true, probeMs = 2000, log = (line) => console.error(`deploy: ${line}`) } = {}) {
 	const { version, code, blobs } = await readEntries(tgz);
 	const q = (params) => new URLSearchParams(params).toString();
 
@@ -163,21 +188,12 @@ export async function deploy(client, tgz, host, { watch = 10, check = true, log 
 	// 4. Watch the live site; roll back on a 5xx.
 	const previous = activated.previous && activated.previous !== version ? activated.previous : null;
 	if (activated.previous === version) watch = 0;
-	for (let waited = 0; waited < watch; waited += 2) {
-		await sleep(2000);
-		let res;
-		try {
-			res = await client.visit(host, path);
-		} catch (err) {
-			res = { status: 0, text: err.message };
-		}
+	for (let waited = 0; waited * 1000 < watch * 1000; waited += probeMs / 1000) {
+		await sleep(probeMs);
+		const res = await client.visit(host, path).catch((err) => ({ status: 0, text: err.message }));
 		if (res.status >= 100 && res.status < 500) continue;
 		log(`live probe of ${path} answered ${res.status || "nothing"}: ${res.text.slice(0, 300)}`);
-		if (previous) {
-			await ok(client.admin("POST", `/activate?${q({ host, version: previous })}`), "rolling back");
-			throw new Error(`the new version failed on live data; rolled back to ${previous} (version ${version} stays uploaded)`);
-		}
-		throw new Error(`the new version failed on live data and there is no previous version; ${version} stays active`);
+		await rollBack(client, host, version, previous);
 	}
 	if (watch > 0) log(`live probes of ${path} passed for ${watch} s`);
 	return activated;

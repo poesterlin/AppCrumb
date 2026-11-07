@@ -539,7 +539,9 @@ export function createModeration(options: ModerationOptions = {}) {
 			actions.push(`<form method="post" action="/releases/${r.id}/reject">${csrfField(me.csrf)}${field("takedown", "Reason (the publisher sees it)")}<button class="button danger">Take down</button></form>`);
 		} else if (r.status === "rejected") {
 			actions.push(
-				hasBlob
+				r.yanked_at
+					? `<p class="dim small">The publisher withdrew this release before it was rejected, so it stays withdrawn.</p>`
+					: hasBlob
 					? `<form method="post" action="/releases/${r.id}/approve">${csrfField(me.csrf)}<button class="button ghost">Reverse: approve and publish</button></form>`
 					: `<p class="dim small">The bundle is gone, so this cannot be reversed.</p>`,
 			);

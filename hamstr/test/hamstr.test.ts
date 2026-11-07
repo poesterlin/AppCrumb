@@ -237,6 +237,30 @@ describe("sign-in", () => {
 			await upgraded.close();
 		}
 	});
+	it("refuses a database written by a newer build", async () => {
+		const { DatabaseSync } = await import("node:sqlite");
+		const { mkdirSync } = await import("node:fs");
+		const newerDir = join(dir, "hamstr-newer");
+		mkdirSync(newerDir, { recursive: true });
+		const newer = new DatabaseSync(join(newerDir, "hamstr.db"));
+		newer.exec("PRAGMA user_version = 99");
+		newer.close();
+		const upgraded = createHamstr({
+			dataDir: newerDir,
+			shellHost: SHELL,
+			crumbDomain: "crumbs.test",
+			scheme: "http",
+			store: storeBase,
+			celldApi: celld.api,
+			adminToken: celld.adminToken,
+			proxyToken: celld.proxyToken,
+			secret: "s",
+			oidc: { issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret },
+			admins: [],
+			logging: false,
+		});
+		await assert.rejects(() => upgraded.listen(0, "127.0.0.1"), /refusing to start on newer data/);
+	});
 	it("ignores a `next` that leaves the shell", async () => {
 		const b = await signIn(BOB, "//evil.example/x");
 		assert.equal(b.last.headers.location, "/");
@@ -810,9 +834,177 @@ describe("stores settings", () => {
 			assert.equal(again[0].url, storeBase);
 			b.core.deleteStore("test", again[0].id);
 			assert.equal(b.core.activeStore(), null);
-			await assert.rejects(() => b.core.storeJson("/api/v1/apps?limit=1"), (err) => err.status === 503 && /Settings → Stores/.test(err.message));
+			await assert.rejects(() => b.core.storeJson("/api/v1/apps?limit=1"), (err: any) => err.status === 503 && /Settings → Stores/.test(err.message));
 		} finally {
 			await b.close();
+		}
+	});
+});
+
+// Races and retries: states the code could reach when two requests overlap.
+// See docs/STATE-MACHINES.md. The mock node holds a call open (celld.gate) so the
+// interleaving is exact, not left to timing.
+describe("races and retries", () => {
+	/** Holds the first admin call for which `match` is true until `release()`. */
+	function hold(match: (path: string, query: Record<string, string>) => boolean) {
+		let release!: () => void;
+		let reached!: () => void;
+		const open = new Promise<void>((r) => (release = r));
+		const arrived = new Promise<void>((r) => (reached = r));
+		let taken = false;
+		celld.gate = (path, query) => {
+			if (taken || !match(path, query)) return undefined;
+			taken = true;
+			reached();
+			return open;
+		};
+		return {
+			arrived,
+			release() {
+				celld.gate = null;
+				release();
+			},
+		};
+	}
+	const publishAs = async (token: string, owner: string, over, bundleVersion: string) => {
+		const m = manifest(over);
+		const created = await call(storeBase, `/api/v1/apps/${owner}/${m.slug}/releases`, { method: "POST", token, json: { manifest: m } });
+		assert.equal(created.status, 201, created.text);
+		const bytes = await bundle({ version: bundleVersion, files: { "index.html": `<h1>${bundleVersion}</h1>` } });
+		const up = await call(storeBase, created.body.upload.url, { method: "PUT", token, body: bytes, headers: { "content-type": "application/gzip" } });
+		assert.equal(up.status, 201, up.text);
+	};
+	let adaB;
+	let bobB;
+	before(async () => {
+		adaB = await signIn(ADA);
+		bobB = await signIn(BOB);
+	});
+
+	it("does not let an app be uninstalled while an update of it is in flight", async () => {
+		await publish({ slug: "racer", name: "Racer" }, "a10000000001");
+		assert.equal((await apiCall(adaB, "POST", "/api/apps", { id: "pub/racer" })).status, 200);
+		await publish({ slug: "racer", name: "Racer", version: "1.1.0" }, "a10000000002");
+		const stall = hold((path) => path === "/check");
+		const update = apiCall(adaB, "POST", "/api/apps", { id: "pub/racer" });
+		await stall.arrived;
+		const removed = await apiCall(adaB, "DELETE", "/api/apps/racer");
+		stall.release();
+		const done = await update;
+		assert.equal(removed.status, 409, removed.text);
+		assert.equal(done.status, 200, done.text);
+		assert.equal(done.json.app.version, "1.1.0");
+		assert.equal((await adaB.request("GET", "/api/apps/racer", { host: SHELL })).status, 200, "still installed");
+	});
+
+	it("refuses a second app of the same name installed at the same time", async () => {
+		const other = (await call(storeBase, "/api/v1/publishers", { method: "POST", json: { name: "other", password: "correct horse battery", acceptPolicy: true } })).body.token;
+		await publish({ slug: "twin", name: "Twin" }, "b20000000001");
+		await publishAs(other, "other", { slug: "twin", name: "Twin Too" }, "b20000000002");
+		const stall = hold((path) => path === "/check");
+		const first = apiCall(adaB, "POST", "/api/apps", { id: "pub/twin" });
+		await stall.arrived;
+		const second = await apiCall(adaB, "POST", "/api/apps", { id: "other/twin" });
+		stall.release();
+		const one = await first;
+		assert.equal(one.status, 200, one.text);
+		assert.equal(second.status, 409, second.text);
+		assert.match(second.json.error, /twin/);
+		assert.equal((await adaB.request("GET", "/api/apps/twin", { host: SHELL })).json.app.storeId, "pub/twin");
+	});
+
+	it("puts a crumb made during an update on the new code", async () => {
+		await publish({ slug: "mover", name: "Mover" }, "c30000000001");
+		assert.equal((await apiCall(adaB, "POST", "/api/apps", { id: "pub/mover" })).status, 200);
+		await publish({ slug: "mover", name: "Mover", version: "1.1.0" }, "c30000000002");
+		const stall = hold((path) => path === "/activate");
+		const creating = apiCall(bobB, "POST", "/api/crumbs", { slug: "mover" });
+		await stall.arrived;
+		const update = await apiCall(adaB, "POST", "/api/apps", { id: "pub/mover" });
+		assert.equal(update.status, 200, update.text);
+		stall.release();
+		const made = await creating;
+		assert.equal(made.status, 201, made.text);
+		const app = hamstr.core.q.app.get("mover");
+		const row = hamstr.core.q.crumb.get(made.json.crumb.id);
+		assert.equal(row.code_version, app.code_version, "the crumb follows the app");
+		assert.equal(celld.sites.get(crumbHost(row.id)), app.code_version, "and so does its celld site");
+	});
+
+	it("leaves no site behind when the app is uninstalled while a crumb is being made", async () => {
+		await publish({ slug: "fleeting", name: "Fleeting" }, "f00000000001");
+		assert.equal((await apiCall(adaB, "POST", "/api/apps", { id: "pub/fleeting" })).status, 200);
+		const before = new Set(celld.sites.keys());
+		const stall = hold((path) => path === "/activate");
+		const creating = apiCall(bobB, "POST", "/api/crumbs", { slug: "fleeting" });
+		await stall.arrived;
+		assert.equal((await apiCall(adaB, "DELETE", "/api/apps/fleeting")).status, 200);
+		stall.release();
+		const made = await creating;
+		assert.equal(made.status, 409, made.text);
+		assert.deepEqual([...celld.sites.keys()].filter((h) => !before.has(h)), [], "no orphan site on the node");
+	});
+
+	it("keeps a single-instance app to one live item per person", async () => {
+		await publish({ slug: "solo", name: "Solo", instances: "single" }, "d40000000001");
+		assert.equal((await apiCall(adaB, "POST", "/api/apps", { id: "pub/solo" })).status, 200);
+		const first = (await apiCall(bobB, "POST", "/api/apps/solo/open", {})).json.crumb;
+		// The API does not make a second one beside it.
+		assert.equal((await apiCall(bobB, "POST", "/api/crumbs", { slug: "solo" })).status, 409);
+		// Trash the first, open a new one, and the old one cannot come back beside it.
+		await apiCall(bobB, "POST", `/api/crumbs/${first.id}/trash`, {});
+		const second = (await apiCall(bobB, "POST", "/api/apps/solo/open", {})).json.crumb;
+		assert.notEqual(second.id, first.id);
+		assert.equal((await apiCall(bobB, "POST", `/api/crumbs/${first.id}/restore`, {})).status, 409);
+		// With nothing else live it restores as before.
+		await apiCall(bobB, "POST", `/api/crumbs/${second.id}/trash`, {});
+		assert.equal((await apiCall(bobB, "POST", `/api/crumbs/${first.id}/restore`, {})).status, 200);
+		const live = hamstr.core.db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE slug = 'solo' AND owner_id = ? AND trashed_at IS NULL").get(hamstr.core.q.crumb.get(first.id).owner_id);
+		assert.equal(live.n, 1);
+	});
+
+	it("does not delete an item while a reset of it is running", async () => {
+		await publish({ slug: "wiper", name: "Wiper" }, "e50000000001");
+		assert.equal((await apiCall(adaB, "POST", "/api/apps", { id: "pub/wiper" })).status, 200);
+		const crumb = (await apiCall(bobB, "POST", "/api/crumbs", { slug: "wiper" })).json.crumb;
+		const stall = hold((path) => path === "/dump");
+		const reset = apiCall(bobB, "POST", `/api/crumbs/${crumb.id}/reset`, { confirm: crumb.id });
+		await stall.arrived;
+		await apiCall(bobB, "POST", `/api/crumbs/${crumb.id}/trash`, {});
+		const purge = await apiCall(bobB, "DELETE", `/api/crumbs/${crumb.id}`);
+		stall.release();
+		const done = await reset;
+		assert.equal(purge.status, 409, purge.text);
+		assert.equal(done.status, 200, done.text);
+		assert.ok(hamstr.core.q.crumb.get(crumb.id), "the item is still there");
+		assert.ok(celld.sites.has(crumbHost(crumb.id)));
+	});
+
+	it("holds the per-person item limit when two items are made at once", async () => {
+		await publish({ slug: "capped", name: "Capped" }, "f60000000001");
+		assert.equal((await apiCall(adaB, "POST", "/api/apps", { id: "pub/capped" })).status, 200);
+		const probe = (await apiCall(bobB, "POST", "/api/crumbs", { slug: "capped" })).json.crumb.id;
+		const bobId = hamstr.core.q.crumb.get(probe).owner_id;
+		hamstr.core.db.prepare("DELETE FROM crumbs WHERE id = ?").run(probe);
+		const have = Number(hamstr.core.db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE owner_id = ?").get(bobId).n);
+		const filler = [];
+		// Fill his account to one below the limit with trashed items (they count, and stay out of the way).
+		for (let i = have; i < hamstr.core.MAX_CRUMBS_PER_USER - 1; i++) {
+			const id = `filler${String(i).padStart(6, "0")}`;
+			filler.push(id);
+			hamstr.core.db.prepare("INSERT INTO crumbs (id, slug, title, owner_id, code_version, created_at, trashed_at) VALUES (?, 'capped', 'filler', ?, 'x', ?, ?)").run(id, bobId, hamstr.core.now(), hamstr.core.now());
+		}
+		try {
+			const before = new Set(celld.sites.keys());
+			const [a, b] = await Promise.all([apiCall(bobB, "POST", "/api/crumbs", { slug: "capped" }), apiCall(bobB, "POST", "/api/crumbs", { slug: "capped" })]);
+			assert.deepEqual([a.status, b.status].sort(), [201, 403], `${a.text} ${b.text}`);
+			const total = Number(hamstr.core.db.prepare("SELECT COUNT(*) AS n FROM crumbs WHERE owner_id = ?").get(bobId).n);
+			assert.equal(total, hamstr.core.MAX_CRUMBS_PER_USER);
+			assert.equal([...celld.sites.keys()].filter((h) => !before.has(h)).length, 1, "the refused one left no site");
+			const made = [a, b].find((r) => r.status === 201).json.crumb.id;
+			hamstr.core.db.prepare("DELETE FROM crumbs WHERE id = ?").run(made);
+		} finally {
+			for (const id of filler) hamstr.core.db.prepare("DELETE FROM crumbs WHERE id = ?").run(id);
 		}
 	});
 });

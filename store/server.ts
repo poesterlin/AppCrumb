@@ -26,7 +26,7 @@ import { CATEGORIES, ManifestError, validateManifest, validatePublisherName, val
 import { clientIp as visitorIp, parseTrustedProxies, type ClientIpOptions } from "./client-ip.ts";
 import { type Db, importSqlite, isUniqueViolation, migrate, openDb, type Sql } from "./db.ts";
 import { refusePublisherName } from "./names.ts";
-import { EVENTS_KEEP_DAYS, logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, setTags, type StoreSettings } from "./releases.ts";
+import { EVENTS_KEEP_DAYS, logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, removeRelease, setTags, yankRelease, type StoreSettings } from "./releases.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // The web UI: a SvelteKit single-page app built into web/build (see web/).
@@ -275,8 +275,13 @@ export function createStore(options: StoreOptions = {}) {
 		if (!db) db = await openDb({ url: config.databaseUrl || undefined, dir: config.databaseUrl ? undefined : join(config.dataDir, "pg") });
 		await migrate(db);
 		await importSqlite(db, config.dataDir);
-		// Abandoned publishes (metadata created, bundle never uploaded) do not hold
-		// a slot forever.
+		await sweep();
+	}
+
+	/** Housekeeping, at start and every few minutes: abandoned publishes (metadata
+	 *  created, bundle never uploaded) do not hold a slot forever, dead blobs go,
+	 *  old audit rows go. */
+	async function sweep() {
 		await db.run("DELETE FROM releases WHERE status = 'uploading' AND created_at < now() - interval '24 hours'");
 		await sweepBlobs();
 		await pruneEvents();
@@ -285,21 +290,19 @@ export function createStore(options: StoreOptions = {}) {
 	/** Delete the files of releases that are gone: removed ones, and rejected
 	 *  ones past their keep time (the moderation site cannot delete files). Only
 	 *  files the database knows to be dead go: a file it does not know at all is
-	 *  left alone, so an empty or wrong database never empties the blob store. */
+	 *  left alone, so an empty or wrong database never empties the blob store.
+	 *  Each candidate is re-checked under the blob's lock (deleteBlobIfUnused). */
 	async function sweepBlobs() {
 		const rows = await db.query(
-			`SELECT bundle_sha, source_sha, (status = 'removed' OR (status = 'rejected' AND reviewed_at <= now() - make_interval(days => $1))) AS dead FROM releases
-			 WHERE bundle_sha IS NOT NULL OR source_sha IS NOT NULL`,
+			`SELECT DISTINCT bundle_sha, source_sha FROM releases
+			 WHERE (bundle_sha IS NOT NULL OR source_sha IS NOT NULL)
+			   AND (status = 'removed' OR (status = 'rejected' AND reviewed_at <= now() - make_interval(days => $1)))`,
 			[REJECTED_KEEP_DAYS],
 		);
-		const live = new Set<string>();
-		const dead = new Set<string>();
 		for (const row of rows) {
-			const into = row.dead ? dead : live;
-			if (row.bundle_sha) into.add(`${row.bundle_sha}.tgz`);
-			if (row.source_sha) into.add(`source-${row.source_sha}.tgz`);
+			await deleteBlobIfUnused(row.bundle_sha);
+			await deleteBlobIfUnused(row.source_sha, "source");
 		}
-		for (const name of dead) if (!live.has(name)) rmSync(join(blobsDir, name), { force: true });
 	}
 	async function pruneEvents() {
 		await db.run("DELETE FROM events WHERE at < now() - make_interval(days => $1)", [EVENTS_KEEP_DAYS]);
@@ -569,25 +572,29 @@ export function createStore(options: StoreOptions = {}) {
 		if ((await appStorage(publisherId)) + size > config.limits.publisherBytes) throw new HttpError(413, `publisher storage limit is ${bytes(config.limits.publisherBytes)}`);
 	}
 
+	const blobPath = (sha: string, kind = "bundle") => join(blobsDir, `${kind === "source" ? "source-" : ""}${sha}.tgz`);
+	/** One lock per blob file. Deleting a file (is anything still using it?) and
+	 *  putting one in place (rename, then point a row at it) must not interleave,
+	 *  or the row ends up pointing at a file the delete just removed. */
+	const lockBlob = (sql: Sql, sha: string, kind = "bundle") => sql.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`blob:${kind}:${sha}`]);
+
+	/** Deletes a blob file unless some release can still need it: any release but
+	 *  a removed one, and a rejected one within its keep time (a moderator may
+	 *  reverse it, which needs the file). */
 	async function deleteBlobIfUnused(sha, kind = "bundle") {
 		if (!sha) return;
 		const column = kind === "source" ? "source_sha" : "bundle_sha";
-		const used = await db.one(`SELECT 1 FROM releases WHERE ${column} = $1 AND status NOT IN ('removed', 'rejected') LIMIT 1`, [sha]);
-		if (used) return;
-		rmSync(join(blobsDir, `${kind === "source" ? "source-" : ""}${sha}.tgz`), { force: true });
+		await db.tx(async (sql) => {
+			await lockBlob(sql, sha, kind);
+			const used = await sql.one(
+				`SELECT 1 FROM releases WHERE ${column} = $1 AND status <> 'removed'
+				 AND NOT (status = 'rejected' AND reviewed_at <= now() - make_interval(days => $2)) LIMIT 1`,
+				[sha, REJECTED_KEEP_DAYS],
+			);
+			if (!used) rmSync(blobPath(sha, kind), { force: true });
+		});
 	}
 
-	// Versions are immutable: a release that ever had a bundle is never deleted,
-	// only emptied. Its row stays (status "removed", hashes kept) and its files
-	// go, so the version can never be published again with other content. A
-	// release whose upload never finished held nothing and is deleted outright.
-	async function removeRelease(sql: Sql, row) {
-		if (!row.bundle_sha && !row.source_sha) {
-			await sql.run("DELETE FROM releases WHERE id = $1", [row.id]);
-			return;
-		}
-		await sql.run("UPDATE releases SET status = 'removed' WHERE id = $1", [row.id]);
-	}
 	async function deleteFilesOf(row) {
 		await deleteBlobIfUnused(row.bundle_sha);
 		await deleteBlobIfUnused(row.source_sha, "source");
@@ -1056,7 +1063,12 @@ export function createStore(options: StoreOptions = {}) {
 				const file = join(blobsDir, `${release.bundle_sha}.tgz`);
 				if (!existsSync(file)) throw new HttpError(500, "stored bundle is missing");
 				await deployDemo(file, host);
-				await db.run("UPDATE demos SET status = 'running' WHERE id = $1", [id]);
+				// The cleanup sweep may have expired the row while the deploy ran: the
+				// site is then already gone (or about to be), and must not be offered.
+				if (!(await db.run("UPDATE demos SET status = 'running' WHERE id = $1 AND status = 'starting'", [id]))) {
+					await deleteDemoSite(host);
+					throw new HttpError(503, "the demo expired while it was starting; try again");
+				}
 				return json(res, 201, {
 					id,
 					url: `${config.demo.scheme}://${host}`,
@@ -1123,8 +1135,21 @@ export function createStore(options: StoreOptions = {}) {
 			const manifest = validateManifest(body.manifest);
 			if (manifest.slug !== slug) return fail(res, 422, `manifest slug ${manifest.slug} does not match ${slug}`);
 			const app = await appByRef(ref);
-			if (app && (await db.one("SELECT 1 FROM releases WHERE app_id = $1 AND version = $2", [app.id, manifest.version]))) {
-				return fail(res, 409, `${ref}@${manifest.version} already exists`);
+			const taken = app ? await db.one("SELECT id, status, bundle_sha FROM releases WHERE app_id = $1 AND version = $2", [app.id, manifest.version]) : undefined;
+			if (taken) {
+				// A publish whose upload never happened (the connection dropped, the
+				// CLI was stopped) is retried with the same version: it picks up the
+				// release it left, with the new manifest. Once there is a bundle the
+				// version is taken for good.
+				const resumed =
+					taken.status === "uploading" && !taken.bundle_sha
+						? await db.run("UPDATE releases SET manifest = $2::jsonb WHERE id = $1 AND status = 'uploading' AND bundle_sha IS NULL", [taken.id, JSON.stringify(manifest)])
+						: 0;
+				if (!resumed) return fail(res, 409, `${ref}@${manifest.version} already exists`);
+				return json(res, 201, {
+					release: { id: taken.id, version: manifest.version, status: "uploading" },
+					upload: { method: "PUT", url: `/api/v1/releases/${taken.id}/bundle`, maxBytes: config.maxBundle },
+				});
 			}
 			if (!app) {
 				const count = Number((await db.one("SELECT COUNT(*)::int AS n FROM apps WHERE publisher_id = $1", [me.id]))?.n ?? 0);
@@ -1162,6 +1187,9 @@ export function createStore(options: StoreOptions = {}) {
 		if (uploadMatch && method === "PUT") {
 			if (!me) return fail(res, 401, "a publisher token is required");
 			if (rateLimited(`upload:${me.id}`, 120, 60 * 60 * 1000)) return tooMany(res);
+			// Pausing publishing stops releases going out, including ones whose
+			// metadata was created before the pause.
+			if (!(await settings()).publishing) return fail(res, 503, "publishing is paused on this store; try again later");
 			const row = await releaseById(Number(uploadMatch[1]));
 			if (!row) return fail(res, 404, "no such release");
 			if (row.publisher_id !== me.id) return fail(res, 403, "not your release");
@@ -1187,10 +1215,13 @@ export function createStore(options: StoreOptions = {}) {
 						throw err;
 					}
 					await checkQuota(me.id, received.size);
-					const blob = join(blobsDir, `${received.sha}.tgz`);
-					renameSync(tmp, blob); // same filesystem: atomic
+					const blob = blobPath(received.sha);
 					const status = config.requireReview ? "pending" : "published";
 					const won = await db.tx(async (sql) => {
+						// Under the blob's lock: a delete of the same bytes cannot slip in
+						// between the file arriving and the row pointing at it.
+						await lockBlob(sql, received.sha);
+						renameSync(tmp, blob); // same filesystem: atomic
 						// Compare-and-set: two uploads can both pass the read above, but
 						// only one may become the bundle of this release. The loser's
 						// blob is removed instead of leaking outside the quota.
@@ -1214,9 +1245,12 @@ export function createStore(options: StoreOptions = {}) {
 				}
 
 				await checkQuota(me.id, received.size);
-				const blob = join(blobsDir, `source-${received.sha}.tgz`);
-				if (!existsSync(blob)) renameSync(tmp, blob);
-				const changed = await db.run("UPDATE releases SET source_sha = $1, source_size = $2 WHERE id = $3 AND source_sha IS NULL", [received.sha, received.size, row.id]);
+				const blob = blobPath(received.sha, "source");
+				const changed = await db.tx(async (sql) => {
+					await lockBlob(sql, received.sha, "source");
+					if (!existsSync(blob)) renameSync(tmp, blob);
+					return sql.run("UPDATE releases SET source_sha = $1, source_size = $2 WHERE id = $3 AND source_sha IS NULL", [received.sha, received.size, row.id]);
+				});
 				if (!changed) {
 					await deleteBlobIfUnused(received.sha, "source");
 					return fail(res, 409, "another source archive already completed this release");
@@ -1236,14 +1270,15 @@ export function createStore(options: StoreOptions = {}) {
 			if (row.publisher_id !== me.id) return fail(res, 403, "not your release");
 			if (releaseOp[2] === "yank" && method === "POST") {
 				if (row.status !== "published" && row.status !== "pending") return fail(res, 409, `a ${row.status} release cannot be withdrawn`);
-				await db.run("UPDATE releases SET status = 'yanked' WHERE id = $1", [row.id]);
+				// A moderator may have decided since the row was read: the change only applies to the state it was checked against.
+				if (!(await yankRelease(db, row.id))) return fail(res, 409, "this release changed while you were withdrawing it; reload and try again");
 				await logEvent(db, me.name, "release.yank", `${row.ref}@${row.version}`);
 				return json(res, 200, { ok: true });
 			}
 			if (!releaseOp[2] && method === "DELETE") {
 				// A rejected release stays as the moderators left it.
 				if (row.status === "rejected") return fail(res, 409, "a rejected release cannot be deleted");
-				await removeRelease(db, row);
+				if (!(await removeRelease(db, row))) return fail(res, 409, "a rejected release cannot be deleted");
 				await deleteFilesOf(row);
 				await logEvent(db, me.name, "release.delete", `${row.ref}@${row.version}`);
 				return json(res, 200, { ok: true });
@@ -1260,11 +1295,12 @@ export function createStore(options: StoreOptions = {}) {
 			// releases' versions stay: the name remains this publisher's, and no
 			// version of it can come back with other content.
 			const rows = await db.query("SELECT * FROM releases WHERE app_id = $1 AND status NOT IN ('removed', 'rejected')", [app.id]);
+			const removed = [];
 			await db.tx(async (sql) => {
-				for (const row of rows) await removeRelease(sql, row);
+				for (const row of rows) if (await removeRelease(sql, row)) removed.push(row);
 				await logEvent(sql, me.name, "app.delete", app.ref);
 			});
-			for (const row of rows) await deleteFilesOf(row);
+			for (const row of removed) await deleteFilesOf(row);
 			return json(res, 200, { ok: true });
 		}
 
@@ -1292,6 +1328,7 @@ export function createStore(options: StoreOptions = {}) {
 		get db() {
 			return db;
 		},
+		sweep,
 		async listen(port = config.port, host = config.host): Promise<AddressInfo> {
 			await init();
 			if (demoOn && !demoTimer) {
@@ -1299,10 +1336,7 @@ export function createStore(options: StoreOptions = {}) {
 				demoTimer = setInterval(() => cleanupDemos().catch((err) => console.error("store: demo cleanup failed", err)), 60_000);
 				demoTimer.unref();
 			}
-			sweepTimer = setInterval(() => {
-				sweepBlobs().catch((err) => console.error("store: blob sweep failed", err));
-				pruneEvents().catch((err) => console.error("store: event prune failed", err));
-			}, 10 * 60 * 1000);
+			sweepTimer = setInterval(() => sweep().catch((err) => console.error("store: sweep failed", err)), 10 * 60 * 1000);
 			sweepTimer.unref();
 			return new Promise<AddressInfo>((resolvePromise, reject) => {
 				server.once("error", reject);

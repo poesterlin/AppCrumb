@@ -30,6 +30,8 @@ export interface Config {
 	/** Sites to leave off the Sites page (Hamstr's own crumbs). */
 	hideSite?: (site: string) => boolean;
 	dbPath: string;
+	/** Most sign-ins that may be in progress at once (default 2000); the oldest go first. */
+	maxFlows?: number;
 	/** The celld admin API (Hamstr's client), to list sites and push mode overrides.
 	 *  `path` is below /__admin; `body` is JSON text. */
 	celld?: { call(method: string, path: string, body?: string): Promise<{ status: number; json: any }> };
@@ -372,7 +374,9 @@ export function createCore(config: Config, deps: Deps = {}) {
 	const flows = new Map<string, Flow>();
 	function sweepFlows() {
 		for (const [k, f] of flows) if (f.exp < now()) flows.delete(k);
-		if (flows.size > 2000) flows.clear();
+		// Over the cap, drop the oldest (Map keeps insertion order), never everyone's
+		// in-flight sign-in: starting flows is open to anyone.
+		while (flows.size > (config.maxFlows ?? 2000)) flows.delete(flows.keys().next().value);
 	}
 
 	/** Where to send the browser to sign in with a provider. */

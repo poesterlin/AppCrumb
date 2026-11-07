@@ -1,7 +1,7 @@
 // API validation for celld-sites, against a local celld dev node (never production).
 // Run: npm test --prefix tools   (needs celld in ~/.local/bin and npm ci --prefix tools)
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -733,6 +733,41 @@ export default { async fetch(req) {
 		assert.match(r.stderr, /live probe of \/check answered 500/);
 		assert.match(r.stderr, new RegExp(`rolled back to ${good.version}`));
 		assert.equal(await active("watch.test"), good.version);
+	});
+	it("does not roll back over a deploy that went live after it", async () => {
+		const good = node.deploy(join(fixtures, "worker"), "race.test");
+		assert.equal((await obj("Kv", "flag", "put", ["bad", true], "race.test")).ok, true);
+		// Deploy B (fails on live data) in the background, so its watch is running...
+		const bundle = mkdtempSync(join(tmpdir(), "celld-api-race-"));
+		dirs.push(bundle);
+		execFileSync("node", [join(project, "tools/pack.ts"), make(pickyOnData), bundle], { env: node.env, stdio: ["ignore", "ignore", "pipe"] });
+		const tar = execFileSync("tar", ["-C", bundle, "-cf", "-", "."]);
+		const push = spawn("sh", [join(project, "node/push.sh"), "race.test", "--watch", "8"], {
+			env: { ...node.env, ADMIN_TOKEN: node.adminToken, ADMIN_HOST: "admin.internal", CELLD_ADMIN_API: `http://127.0.0.1:${node.port}` },
+		});
+		let stderr = "";
+		push.stderr.on("data", (d) => (stderr += d));
+		const exited = new Promise<number | null>((r) => push.on("close", r));
+		push.stdin.end(tar);
+		for (let i = 0; i < 100 && (await active("race.test")) === good.version; i++) await new Promise((r) => setTimeout(r, 50));
+		const b = await active("race.test");
+		assert.notEqual(b, good.version, "B went live");
+		// ...then C goes live while B is being watched.
+		const other = mkdtempSync(join(tmpdir(), "celld-api-race-c-"));
+		dirs.push(other);
+		cpSync(join(fixtures, "worker"), other, { recursive: true });
+		writeFileSync(join(other, "worker.ts"), 'export default { fetch() { return new Response("down", { status: 503 }); } };');
+		writeFileSync(join(other, "celld.json"), JSON.stringify({ worker: "worker.ts", assets: "public", objects: "objects.ts", check: false }));
+		const cOut = mkdtempSync(join(tmpdir(), "celld-api-race-cb-"));
+		dirs.push(cOut);
+		execFileSync("node", [join(project, "tools/pack.ts"), other, cOut], { env: node.env, stdio: ["ignore", "ignore", "pipe"] });
+		const c = await node.stage(cOut, "race.test");
+		assert.equal((await node.admin("POST", `/activate?host=race.test&version=${c}`)).status, 200);
+		const code = await exited;
+		assert.equal(code, 1, stderr);
+		assert.match(stderr, /superseded/);
+		assert.doesNotMatch(stderr, /rolled back/);
+		assert.equal(await active("race.test"), c, "the newer deploy stays live");
 	});
 	it("keeps a version whose live probes pass", async () => {
 		const r = node.tryDeploy(make(pickyOnData), "watchok.test", "--watch", "4");

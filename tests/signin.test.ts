@@ -125,6 +125,13 @@ describe("sign-in: handoff and cookie", () => {
 		];
 		for (const t of bad) assert.equal((await get(node, "gated.test", `/.celld/auth/callback?token=${t}`)).status, 400, t.slice(0, 20));
 	});
+	it("keeps a spent handoff spent in another isolate (here: after the router restarts)", async () => {
+		const once = handoff("gated.test");
+		assert.equal((await get(node, "gated.test", `/.celld/auth/callback?token=${once}`)).status, 303);
+		await node.restart();
+		assert.equal((await get(node, "gated.test", `/.celld/auth/callback?token=${once}`)).status, 400, "the link works once, not once per isolate");
+		assert.equal((await get(node, "gated.test", `/.celld/auth/callback?token=${handoff("gated.test")}`)).status, 303, "a fresh one still works");
+	});
 	it("does not accept another host's cookie", async () => {
 		const c = cookieOf(await get(node, "gated.test", `/.celld/auth/callback?token=${handoff("gated.test")}`));
 		assert.equal((await get(node, "open.test", "/.celld/auth/me", { cookie: c })).json().user, null);
