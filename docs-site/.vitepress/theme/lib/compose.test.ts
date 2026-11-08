@@ -209,13 +209,13 @@ test("runtime limits, logging and the restart policy are always there", () => {
 test("extra environment is merged, duplicates and garbage are handled", () => {
 	const g = generate(
 		options("domain", {
-			extraEnv: "CELLD_LOG=info\nDOMAIN=other.example\nnot a pair\n# comment\nJEV_API_KEY=abc",
+			extraEnv: "CELLD_LOG=info\nDOMAIN=other.example\nnot a pair\n# comment\nCLOUDFLARE_API_TOKEN=abc",
 		}),
 	);
 	const env = envOf(g.yaml);
 	assert.equal(env.get("CELLD_LOG"), "info");
 	assert.equal(env.get("DOMAIN"), "example.com"); // not overwritten
-	assert.equal(env.get("JEV_API_KEY"), "abc");
+	assert.equal(env.get("CLOUDFLARE_API_TOKEN"), "abc");
 	assert.ok(g.warnings.some((w) => w.includes("not a pair")));
 });
 

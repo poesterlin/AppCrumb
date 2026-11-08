@@ -1,5 +1,5 @@
-// Regression tests for the release lifecycle (docs/STATE-MACHINES.md): states
-// that concurrency or retries used to reach and the table says are not allowed.
+// Regression tests for the release lifecycle: states that concurrency or
+// retries used to reach and the lifecycle does not allow.
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -21,17 +21,17 @@ describe("release lifecycle under concurrency", () => {
 	let store;
 	let moderation;
 	let base: string;
-	let jev;
+	let classifierServer;
 	/** Runs inside the classifier call: the moment a person can act mid-check. */
 	let duringCheck: (() => Promise<void>) | null = null;
 
 	before(async () => {
-		jev = createServer(async (req, res) => {
+		classifierServer = createServer(async (req, res) => {
 			for await (const _ of req);
 			await duringCheck?.();
 			res.writeHead(200, { "content-type": "application/json" }).end(
 				JSON.stringify({
-					model: "jev-test",
+					model: "classifierServer-test",
 					answers: {
 						harm: { score: duringBlock ? 4 : 0.8, confidence: 0.9 },
 						kind: { choice: "utility", confidence: 0.9, probabilities: {} },
@@ -41,7 +41,7 @@ describe("release lifecycle under concurrency", () => {
 				}),
 			);
 		});
-		await new Promise<void>((r) => jev.listen(0, "127.0.0.1", () => r()));
+		await new Promise<void>((r) => classifierServer.listen(0, "127.0.0.1", () => r()));
 		db = await openDb({ url: databaseUrl, dir: databaseUrl ? undefined : join(dir, "pg") });
 		await migrate(db);
 		store = createStore({ dataDir: dir, db, requireReview: true, rateLimit: false, logging: false });
@@ -52,7 +52,7 @@ describe("release lifecycle under concurrency", () => {
 			password: "moderator password",
 			worker: false,
 			logging: false,
-			classifier: { url: `http://127.0.0.1:${(jev.address() as AddressInfo).port}/v1/systemone`, model: "jev-test" },
+			classifier: { url: `http://127.0.0.1:${(classifierServer.address() as AddressInfo).port}/ai/run`, model: "classifierServer-test" },
 			policy: { autoApprove: true },
 		});
 		await moderation.listen(0, "127.0.0.1");
@@ -61,7 +61,7 @@ describe("release lifecycle under concurrency", () => {
 		await moderation.close();
 		await store.close();
 		await db.close();
-		jev.close();
+		classifierServer.close();
 		rmSync(dir, { recursive: true, force: true });
 	});
 

@@ -21,7 +21,7 @@ import { clientIp as visitorIp, parseTrustedProxies } from "../client-ip.ts";
 import { type Db, migrate, openDb } from "../db.ts";
 import { logEvent, publishRelease, readSettings, REJECTED_KEEP_DAYS, rejectRelease, suspendPublisher, unsuspendPublisher, writeSetting } from "../releases.ts";
 import { bundleFiles, createChecker, DEFAULT_POLICY, type Policy } from "./checks.ts";
-import { CLEF_BODY_MODEL, clefUrl, type ClassifierConfig } from "./jev.ts";
+import { CLEF_BODY_MODEL, clefUrl, type ClassifierConfig } from "./classifier.ts";
 import { createOidc, OidcError, pkce, profileAllowed, type OidcConfig } from "./oidc.ts";
 import { ago, csrfField, esc, findingsList, layout, loginPage, riskChip, size, statusChip } from "./pages.ts";
 
@@ -155,13 +155,11 @@ export function oidcFromEnv(env = process.env): ModerationOidcOptions | null {
 const flag = (value: string | undefined, fallback: boolean) => (value === undefined || value === "" ? fallback : value === "1" || value === "true");
 
 export function classifierFromEnv(env = process.env): ClassifierConfig | null {
-	const apiKey = env.JEV_API_KEY || env.CLOUDFLARE_API_TOKEN || undefined;
 	const accountId = env.CLOUDFLARE_ACCOUNT_ID || "";
-	const url = env.JEV_URL || (accountId && apiKey ? clefUrl(accountId) : "");
-	if (!url && !apiKey) return null;
-	if (!url) throw new Error("set JEV_URL or CLOUDFLARE_ACCOUNT_ID with CLOUDFLARE_API_TOKEN / JEV_API_KEY");
-	const defaultModel = /\/ai\/run\/@cf\/cloudflare\/clef/.test(url) ? CLEF_BODY_MODEL : "jev-latest";
-	return { url, apiKey, model: env.JEV_MODEL || defaultModel };
+	const apiKey = env.CLOUDFLARE_API_TOKEN || "";
+	if (!accountId && !apiKey) return null;
+	if (!accountId || !apiKey) throw new Error("set both CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (Workers AI Run) to turn the classifier on");
+	return { url: clefUrl(accountId), apiKey, model: CLEF_BODY_MODEL };
 }
 
 export function policyFromEnv(env = process.env): Policy {
@@ -482,8 +480,8 @@ export function createModeration(options: ModerationOptions = {}) {
 				<dt>Review from risk</dt><dd>${p.reviewAt}</dd><dt>Block from risk</dt><dd>${p.blockAt}</dd>
 				<dt>Block automatically</dt><dd>${p.autoBlock ? "yes" : "no"}</dd>
 				<dt>Approve low risk</dt><dd>${p.autoApprove ? "every publisher" : p.autoApproveTrusted ? "trusted publishers only" : "never"}</dd>
-				<dt>Classifier</dt><dd>${config.classifier ? `${esc(config.classifier.model)} at ${esc(new URL(config.classifier.url).host)}` : "off (set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or JEV_URL)"}</dd>
-			</dl><p class="tiny dim gap-top">Set with MODERATION_*, CLOUDFLARE_* / JEV_* in the environment; see store/README.md.</p></section>`,
+				<dt>Classifier</dt><dd>${config.classifier ? `${esc(config.classifier.model)} at ${esc(new URL(config.classifier.url).host)}` : "off (set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)"}</dd>
+			</dl><p class="tiny dim gap-top">Set with MODERATION_*, CLOUDFLARE_* in the environment; see store/README.md.</p></section>`,
 		);
 	}
 

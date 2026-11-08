@@ -572,14 +572,12 @@ arrives, before or after publication:
    a fresh token (older accounts only), and a publisher name one letter from
    another's or carrying a brand. Each of these sends the release to a person
    even when its publisher is trusted.
-2. An optional classifier (`moderation/jev.ts`): a System One decision model
-   (Cloudflare Workers AI Clef by default; Jev-compatible) scores the release's
-   state (listing, page text, form fields, hosts, the start of the server
-   code) for harm and answers whether it impersonates a brand or asks for
-   other services' secrets. Set `CLOUDFLARE_ACCOUNT_ID` and
-   `CLOUDFLARE_API_TOKEN` (Workers AI Run), or `JEV_URL` / `JEV_API_KEY` /
-   `JEV_MODEL` for another endpoint. It is advisory and sends publisher
-   content to that endpoint.
+2. An optional classifier (`moderation/classifier.ts`): Cloudflare Workers AI
+   Clef scores the release's state (listing, page text, form fields, hosts, the
+   start of the server code) for harm and answers whether it impersonates a
+   brand or asks for other services' secrets. Set `CLOUDFLARE_ACCOUNT_ID` and
+   `CLOUDFLARE_API_TOKEN` (Workers AI Run) to turn it on. It is advisory and
+   sends publisher content to Workers AI.
 3. The higher of the two risks decides: `block` from `MODERATION_BLOCK_AT`
    (0.9), `review` from `MODERATION_REVIEW_AT` (0.4), `allow` below.
 

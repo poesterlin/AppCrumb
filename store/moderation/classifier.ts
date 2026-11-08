@@ -1,7 +1,6 @@
-// An optional classifier for the review queue: a System One decision model
-// (typed score / choice / yes-no questions about a state). Drop-in compatible
-// with TypeSafe's Jev and Cloudflare's Clef on Workers AI
-// (https://developers.cloudflare.com/workers-ai/models/clef/).
+// An optional classifier for the review queue: Cloudflare's Clef on Workers AI,
+// a decision model that answers typed score / choice / yes-no questions about a
+// state (https://developers.cloudflare.com/workers-ai/models/clef/).
 //
 // It is advisory. The rules in scan.ts run first and explain themselves; the
 // classifier adds a risk estimate for what rules cannot see (an honest-looking
@@ -9,10 +8,8 @@
 // approves every release unless the operator turns that off.
 //
 // What leaves this machine: the listing, page titles and text, form fields,
-// the hosts the app mentions and the start of its server code. Point the
-// endpoint only at a provider whose data terms you accept for publishers'
-// code. Prefer Cloudflare Workers AI Clef (zero retention for standard
-// inference; no training on Customer Content) over free trial endpoints.
+// the hosts the app mentions and the start of its server code. Workers AI
+// keeps no copy of standard inference and does not train on Customer Content.
 import type { ScanResult } from "./scan.ts";
 
 export interface ClassifierConfig {
@@ -77,8 +74,8 @@ export const QUESTIONS = {
 	},
 };
 
-/** Cloudflare Workers AI Clef (System One API, drop-in for Jev). */
 const CLEF_MODEL = "@cf/cloudflare/clef";
+/** The model name the request body carries. */
 export const CLEF_BODY_MODEL = "clef";
 
 export function clefUrl(accountId: string): string {
@@ -108,8 +105,8 @@ export function stateFor(manifest: any, publisher: { name: string; ageDays: numb
 	};
 }
 
-/** Cloudflare's /ai/run wraps the model payload in `{ success, result }`; bare
- *  System One endpoints return the answers object at the top level. */
+/** Cloudflare's /ai/run wraps the model payload in `{ success, result }`. A bare
+ *  answers object (as a test double returns it) is accepted too. */
 function unwrap(body: any): any {
 	if (body && typeof body === "object" && "success" in body && "result" in body) {
 		if (body.success === false) {

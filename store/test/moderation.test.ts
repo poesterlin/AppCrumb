@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { migrate, openDb } from "../db.ts";
-import { classify, QUESTIONS } from "../moderation/jev.ts";
+import { classify, QUESTIONS } from "../moderation/classifier.ts";
 import { scanRelease } from "../moderation/scan.ts";
-import { createModeration } from "../moderation/server.ts";
+import { classifierFromEnv, createModeration } from "../moderation/server.ts";
 import { createStore } from "../server.ts";
 import { call, manifest, sha256, tgz } from "./helpers.ts";
 
@@ -101,6 +101,21 @@ describe("moderation rules", () => {
 	});
 });
 
+describe("classifier from the environment", () => {
+	it("is off without Cloudflare settings, and needs both values", () => {
+		assert.equal(classifierFromEnv({}), null);
+		assert.throws(() => classifierFromEnv({ CLOUDFLARE_ACCOUNT_ID: "abc" }), /both CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN/);
+		assert.throws(() => classifierFromEnv({ CLOUDFLARE_API_TOKEN: "t" }), /both/);
+	});
+
+	it("points at Clef on the account", () => {
+		const c = classifierFromEnv({ CLOUDFLARE_ACCOUNT_ID: "abc", CLOUDFLARE_API_TOKEN: "t" });
+		assert.equal(c?.url, "https://api.cloudflare.com/client/v4/accounts/abc/ai/run/@cf/cloudflare/clef");
+		assert.equal(c?.model, "clef");
+		assert.equal(c?.apiKey, "t");
+	});
+});
+
 describe("classifier client", () => {
 	let server;
 	let url: string;
@@ -115,7 +130,7 @@ describe("classifier client", () => {
 			res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(payload));
 		});
 		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
-		url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/systemone`;
+		url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/ai/run`;
 	});
 	after(() => server.close());
 
@@ -123,7 +138,7 @@ describe("classifier client", () => {
 		answer = () => [
 			200,
 			{
-				model: "jev-1.13.0",
+				model: "classifierServer-1.13.0",
 				answers: {
 					harm: { type: "score", score: 3.6, confidence: 0.8 },
 					kind: { type: "choice", choice: "credential_theft", confidence: 0.9, probabilities: { credential_theft: 0.9, utility: 0.1 } },
@@ -132,9 +147,9 @@ describe("classifier client", () => {
 				},
 			},
 		];
-		const c = await classify({ url, apiKey: "k", model: "jev-latest" }, { listing: { name: "x" } });
+		const c = await classify({ url, apiKey: "k", model: "classifierServer-latest" }, { listing: { name: "x" } });
 		assert.equal(last.headers.authorization, "Bearer k");
-		assert.equal(last.body.model, "jev-latest");
+		assert.equal(last.body.model, "classifierServer-latest");
 		assert.deepEqual(Object.keys(last.body.questions), Object.keys(QUESTIONS));
 		assert.equal(last.body.questions.harm.type, "score");
 		assert.equal(last.body.questions.kind.type, "choice");
@@ -183,28 +198,28 @@ describe("store and moderation on one database", () => {
 	let moderation;
 	let storeBase: string;
 	let modBase: string;
-	let jev;
-	let jevAnswer = 0.2;
+	let classifierServer;
+	let classifierAnswer = 0.2;
 	let cookie = "";
 	let csrf = "";
 
 	before(async () => {
 		// A stand-in classifier: risk from the harm score we set per test.
-		jev = createServer(async (req, res) => {
+		classifierServer = createServer(async (req, res) => {
 			for await (const _ of req);
 			res.writeHead(200, { "content-type": "application/json" }).end(
 				JSON.stringify({
-					model: "jev-test",
+					model: "classifierServer-test",
 					answers: {
-						harm: { score: jevAnswer * 4, confidence: 0.9 },
-						kind: { choice: jevAnswer > 0.5 ? "scam_or_spam" : "utility", confidence: 0.9, probabilities: {} },
+						harm: { score: classifierAnswer * 4, confidence: 0.9 },
+						kind: { choice: classifierAnswer > 0.5 ? "scam_or_spam" : "utility", confidence: 0.9, probabilities: {} },
 						impersonation: { noul: 0.1 },
 						collects_secrets: { noul: 0.1 },
 					},
 				}),
 			);
 		});
-		await new Promise<void>((r) => jev.listen(0, "127.0.0.1", () => r()));
+		await new Promise<void>((r) => classifierServer.listen(0, "127.0.0.1", () => r()));
 		db = await openDb({ url: process.env.STORE_TEST_DATABASE_URL, dir: process.env.STORE_TEST_DATABASE_URL ? undefined : join(dir, "pg") });
 		await migrate(db);
 		store = createStore({ dataDir: dir, db, requireReview: true, rateLimit: false, logging: false });
@@ -215,7 +230,7 @@ describe("store and moderation on one database", () => {
 			password: "moderator password",
 			worker: false,
 			logging: false,
-			classifier: { url: `http://127.0.0.1:${(jev.address() as AddressInfo).port}/v1/systemone`, model: "jev-test" },
+			classifier: { url: `http://127.0.0.1:${(classifierServer.address() as AddressInfo).port}/ai/run`, model: "classifierServer-test" },
 		});
 		modBase = `http://127.0.0.1:${(await moderation.listen(0, "127.0.0.1")).port}`;
 	});
@@ -223,7 +238,7 @@ describe("store and moderation on one database", () => {
 		await moderation.close();
 		await store.close();
 		await db.close();
-		jev.close();
+		classifierServer.close();
 		rmSync(dir, { recursive: true, force: true });
 	});
 
@@ -276,7 +291,7 @@ describe("store and moderation on one database", () => {
 		assert.equal(await moderation.checker.tick(), 1);
 		const c = await check(id);
 		assert.equal(c.verdict, "allow");
-		assert.equal(c.classifier.model, "jev-test");
+		assert.equal(c.classifier.model, "classifierServer-test");
 		assert.equal(await status(id), "pending", "nobody approved it yet");
 		const queue = await page("/");
 		assert.match(queue.text, /chores@1\.0\.0/);
@@ -322,10 +337,10 @@ describe("store and moderation on one database", () => {
 
 	it("uses the classifier's score when the rules see nothing", async () => {
 		const token = await publisher("spammy");
-		jevAnswer = 0.75;
+		classifierAnswer = 0.75;
 		const id = await submit(token, "prize", "1.0.0", { "index.html": [HTML, "<h1>You won!</h1>"] });
 		await moderation.checker.tick();
-		jevAnswer = 0.2;
+		classifierAnswer = 0.2;
 		const c = await check(id);
 		assert.equal(c.verdict, "review");
 		assert.equal(Number(c.risk.toFixed(2)), 0.75);

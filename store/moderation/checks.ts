@@ -1,6 +1,6 @@
 // The check worker: every release with a bundle gets one automatic check. It
 // reads the bundle, runs the rules (scan.ts), asks the classifier if one is
-// configured (jev.ts), stores the result in moderation_checks and applies the
+// configured (classifier.ts), stores the result in moderation_checks and applies the
 // policy:
 //
 //   block  → rejected at once (if autoBlock), with the reason for the publisher;
@@ -17,7 +17,7 @@ import { readBundle } from "../../packages/app-format/bundle.ts";
 import type { Db, Sql } from "../db.ts";
 import { nameConcerns } from "../names.ts";
 import { logEvent, publishRelease, rejectRelease } from "../releases.ts";
-import { type Classification, type ClassifierConfig, classifierRisk, classify, stateFor } from "./jev.ts";
+import { type Classification, type ClassifierConfig, classifierRisk, classify, stateFor } from "./classifier.ts";
 import { type Finding, isText, type ScanFile, scanRelease, type Severity, severityOf } from "./scan.ts";
 
 export interface Policy {

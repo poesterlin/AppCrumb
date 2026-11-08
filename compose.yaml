@@ -430,11 +430,11 @@ services:
       MODERATION_AUTO_BLOCK: ${MODERATION_AUTO_BLOCK:-}
       MODERATION_AUTO_APPROVE: ${MODERATION_AUTO_APPROVE:-}
       MODERATION_AUTO_APPROVE_TRUSTED: ${MODERATION_AUTO_APPROVE_TRUSTED:-}
-      # Optional classifier (TypeSafe Jev). Unset = rules only. It sends listing
-      # text, page text and the start of the server code to that endpoint.
-      JEV_URL: ${JEV_URL:-}
-      JEV_API_KEY: ${JEV_API_KEY:-}
-      JEV_MODEL: ${JEV_MODEL:-}
+      # Optional classifier (Cloudflare Workers AI Clef). Unset = rules only.
+      # Sends listing text, page text and the start of the server code to
+      # Workers AI. Both values are needed.
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
     volumes:
       - store-data:/data:ro
     read_only: true
