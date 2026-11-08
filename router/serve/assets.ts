@@ -68,8 +68,51 @@ export async function assetResponse(env: any, version: string, path: string, met
 	if (file === null) return null;
 	if (status === 200 && notModified(request, headers.etag)) return new Response(null, { status: 304, headers });
 	headers["content-type"] = safeContentType(file.type);
+	if (status === 200) {
+		const partial = rangeResponse(request, headers, file.value, head);
+		if (partial) return partial;
+	}
 	headers["content-length"] = String(file.value.byteLength);
 	return new Response(head ? null : file.value, { status, headers });
+}
+
+/** The 206 or 416 answer to a Range request, or null to send the whole file.
+ *  Sets `accept-ranges` on `headers` either way. */
+function rangeResponse(request: Request | undefined, headers: Record<string, string>, value: ArrayBuffer, head: boolean): Response | null {
+	headers["accept-ranges"] = "bytes";
+	// One byte range (Safari won't play <video> without 206 answers). Multiple
+	// ranges, or an If-Range for another version, get the whole file.
+	const size = value.byteLength;
+	const range = byteRange(request, headers.etag, size);
+	if (range === "unsatisfiable") return new Response(null, { status: 416, headers: { ...headers, "content-range": `bytes */${size}` } });
+	if (!range) return null;
+	const [start, end] = range;
+	headers["content-range"] = `bytes ${start}-${end}/${size}`;
+	headers["content-length"] = String(end - start + 1);
+	return new Response(head ? null : value.slice(start, end + 1), { status: 206, headers });
+}
+
+/** The single byte range a request asks for, as [first, last] (inclusive), or
+ *  null for the whole file. */
+export function byteRange(request: Request | undefined, etag: string, size: number): [number, number] | "unsatisfiable" | null {
+	const header = request?.headers.get("range");
+	if (!header) return null;
+	const ifRange = request?.headers.get("if-range");
+	if (ifRange && ifRange.trim() !== etag) return null;
+	const m = header.trim().match(/^bytes=(\d*)-(\d*)$/);
+	if (!m || (m[1] === "" && m[2] === "")) return null;
+	let start: number, end: number;
+	if (m[1] === "") {
+		const suffix = Number(m[2]); // last N bytes
+		if (suffix === 0) return "unsatisfiable";
+		start = Math.max(0, size - suffix);
+		end = size - 1;
+	} else {
+		start = Number(m[1]);
+		end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+		if (start > end || start >= size) return "unsatisfiable";
+	}
+	return [start, end];
 }
 
 /** A stored content type is served as a header only if it is printable ASCII;
@@ -78,6 +121,7 @@ const safeContentType = (t) => (typeof t === "string" && t.length <= 200 && /^[\
 
 /** The ASSETS binding handed to each site: serves only that version's files. */
 export class SiteAssets extends WorkerEntrypoint<Env> {
+	// fallow-ignore-next-line unused-class-member
 	async fetch(request) {
 		let path;
 		try {
