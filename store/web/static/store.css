@@ -3,15 +3,6 @@
    a little sage as accents. The store is always light: the palette is the
    brand, so following the OS dark theme would lose it. */
 
-/* SvelteKit's route announcer is visually hidden with an inline style, which
-   the store's CSP blocks. Hide it from here instead so navigation cannot make
-   the announcement text visible at the top of the page. */
-#svelte-announcer {
-	position: absolute; top: 0; left: 0;
-	width: 1px; height: 1px; overflow: hidden;
-	clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
-}
-
 @font-face {
 	font-family: "Fredoka";
 	font-style: normal;

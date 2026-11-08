@@ -28,42 +28,26 @@
           <rect class="pn-ping pn-ping--invoices" x="340" y="90" width="124" height="124" rx="28" />
 
           <!-- apps: always lit -->
-          <g class="pn-app pn-app--heavy pn-app--a" transform="translate(42 96)">
-            <rect class="pn-app__box" width="112" height="112" rx="22" />
-            <use href="#pn-icon-notes" transform="translate(56 56)" class="pn-icon" />
-          </g>
-          <g class="pn-app pn-app--heavy pn-app--b" transform="translate(194 96)">
-            <rect class="pn-app__box" width="112" height="112" rx="22" />
-            <use href="#pn-icon-photos" transform="translate(56 56)" class="pn-icon" />
-          </g>
-          <g class="pn-app pn-app--heavy pn-app--c" transform="translate(346 96)">
-            <rect class="pn-app__box" width="112" height="112" rx="22" />
-            <use href="#pn-icon-invoices" transform="translate(56 56)" class="pn-icon" />
-          </g>
+          {#each [["a", 42, "notes"], ["b", 194, "photos"], ["c", 346, "invoices"]] as [key, x, icon] (key)}
+            <g class="pn-app pn-app--heavy pn-app--{key}" transform="translate({x} 96)">
+              <rect class="pn-app__box" width="112" height="112" rx="22" />
+              <use href="#pn-icon-{icon}" transform="translate(56 56)" class="pn-icon" />
+            </g>
+          {/each}
 
           <!-- database flash rings -->
           <rect class="pn-db-flash pn-db-flash--photos" x="180" y="236" width="140" height="258" rx="30" />
           <rect class="pn-db-flash pn-db-flash--invoices" x="332" y="236" width="140" height="258" rx="30" />
 
           <!-- heavy database stacks: always warm -->
-          <g class="pn-stack pn-stack--a" transform="translate(98 264)">
-            <use href="#pn-postgres" />
-            <g class="pn-leds pn-leds--a">
-              <circle cx="24" cy="56" r="2.4" /><circle cx="34" cy="55" r="2.4" /><circle cx="43" cy="52" r="2.4" />
+          {#each [["a", 98], ["b", 250], ["c", 402]] as [key, x] (key)}
+            <g class="pn-stack pn-stack--{key}" transform="translate({x} 264)">
+              <use href="#pn-postgres" />
+              <g class="pn-leds pn-leds--{key}">
+                <circle cx="24" cy="56" r="2.4" /><circle cx="34" cy="55" r="2.4" /><circle cx="43" cy="52" r="2.4" />
+              </g>
             </g>
-          </g>
-          <g class="pn-stack pn-stack--b" transform="translate(250 264)">
-            <use href="#pn-postgres" />
-            <g class="pn-leds pn-leds--b">
-              <circle cx="24" cy="56" r="2.4" /><circle cx="34" cy="55" r="2.4" /><circle cx="43" cy="52" r="2.4" />
-            </g>
-          </g>
-          <g class="pn-stack pn-stack--c" transform="translate(402 264)">
-            <use href="#pn-postgres" />
-            <g class="pn-leds pn-leds--c">
-              <circle cx="24" cy="56" r="2.4" /><circle cx="34" cy="55" r="2.4" /><circle cx="43" cy="52" r="2.4" />
-            </g>
-          </g>
+          {/each}
 
           <!-- query packets on the wire -->
           <circle class="pn-query pn-query--photos" cx="250" cy="208" r="3.5" />
