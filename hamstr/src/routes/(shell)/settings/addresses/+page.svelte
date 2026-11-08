@@ -20,6 +20,7 @@
 	const using = $derived(address.trim() || (hereIsAddress ? here : ""));
 	const sample = $derived(using ? `crumb-example.${using.replaceAll(".", "-")}.${names}${page.url.port ? `:${page.url.port}` : ""}` : "");
 	const dirty = $derived(names !== data.network.names || address.trim() !== data.network.address);
+	const testing = $derived(check?.state === "testing");
 
 	async function test() {
 		check = { state: "testing" };
@@ -42,6 +43,19 @@
 		}
 	}
 </script>
+
+{#snippet hint()}
+	{#if hereIsAddress}Left empty, the address you opened Hamstr with ({here}) is used.
+	{:else}You opened Hamstr as <span class="mono">{here}</span>, a name, so these names need the address typed here. Without it apps open on ports.{/if}
+{/snippet}
+
+{#snippet result()}
+	{#if check?.state === "ok"}
+		<p class="callout">It works: your browser resolved <span class="mono">{check.host}</span> and reached Hamstr.</p>
+	{:else if check?.state === "failed"}
+		<p class="callout error">Your browser could not reach <span class="mono">{check.host}</span>. Check the address, your internet DNS, or your router's rebinding protection, or switch services or back to ports.</p>
+	{/if}
+{/snippet}
 
 <svelte:head><title>Addresses · Settings</title></svelte:head>
 
@@ -66,21 +80,14 @@
 	<div class="field" style="margin-top: 1rem">
 		<label for="address">This box's IPv4 address</label>
 		<input id="address" class="input mono" bind:value={address} placeholder={hereIsAddress ? `${here} (from your address bar)` : "192.168.1.5"} autocomplete="off" />
-		<span class="dim small">
-			{#if hereIsAddress}Left empty, the address you opened Hamstr with ({here}) is used.
-			{:else}You opened Hamstr as <span class="mono">{here}</span>, a name, so these names need the address typed here. Without it apps open on ports.{/if}
-		</span>
+		<span class="dim small">{@render hint()}</span>
 	</div>
 	{#if sample}<p class="dim small">Example: <span class="mono">http://{sample}</span></p>{/if}
 	<p class="callout">sslip.io and nip.io are public domains shared with everyone, so any website on them can set cookies that your apps would also see; if an app stops loading with a "too large" error, clear cookies for that domain, or use ports. These names come from a public DNS service, so they need internet access. Some routers block public names that point at private addresses (DNS rebinding protection); use Test to check yours.</p>
-	{#if check?.state === "ok"}
-		<p class="callout">It works: your browser resolved <span class="mono">{check.host}</span> and reached Hamstr.</p>
-	{:else if check?.state === "failed"}
-		<p class="callout error">Your browser could not reach <span class="mono">{check.host}</span>. Check the address, your internet DNS, or your router's rebinding protection, or switch services or back to ports.</p>
-	{/if}
+	{@render result()}
 {/if}
 
 <div class="head-actions" style="margin-top: 1rem">
-	{#if names !== "off"}<button class="button ghost" type="button" disabled={!using || check?.state === "testing"} onclick={test}>{check?.state === "testing" ? "Testing…" : "Test"}</button>{/if}
+	{#if names !== "off"}<button class="button ghost" type="button" disabled={!using || testing} onclick={test}>{testing ? "Testing…" : "Test"}</button>{/if}
 	<button class="button" type="button" disabled={!dirty || busy} onclick={save}>Save</button>
 </div>

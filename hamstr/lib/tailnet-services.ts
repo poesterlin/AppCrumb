@@ -115,52 +115,30 @@ export function createTailnetServices(options: Options) {
 		return at < 0 ? {} : JSON.parse(text.slice(at));
 	};
 
-	async function reconcile(desired: Desired[], { dryRun = false }: { dryRun?: boolean } = {}): Promise<Summary> {
+	interface State {
+		defs: Map<string, any>;
+		served: Set<string>;
+		advertised: Set<string>;
+		proxies: Map<string, string>;
+	}
+	/** What one reconcile cycle does and records: the plan, the failures and the CLI runner. */
+	interface Cycle {
+		dryRun: boolean;
+		summary: Summary;
+		failedNames: Set<string>;
+		step: (text: string) => void;
+		fail: (name: string, what: string, err: unknown) => void;
+		exec: (name: string, args: string[], what: string) => Promise<boolean>;
+	}
+
+	function newCycle(dryRun: boolean): Cycle {
 		const summary: Summary = { added: 0, removed: 0, unchanged: 0, failed: 0, plan: [] };
-		const step = (text: string) => summary.plan.push(text);
 		const failedNames = new Set<string>();
+		const step = (text: string) => summary.plan.push(text);
 		const fail = (name: string, what: string, err: unknown) => {
 			failedNames.add(name);
 			log(`${what} ${name}: ${(err as Error).message}`);
 		};
-
-		// Desired names, validated; one name per crumb.
-		const want = new Map<string, Desired>();
-		for (const d of desired) {
-			const name = serviceName(d.id);
-			if (!name) {
-				summary.failed++;
-				log(`skipping crumb id with no valid service name: ${JSON.stringify(String(d.id).slice(0, 40))}`);
-				continue;
-			}
-			want.set(`svc:${name}`, d);
-		}
-
-		// One read of everything per cycle: definitions, what is served, what is advertised.
-		let defs = new Map<string, any>();
-		let served = new Set<string>();
-		let advertised = new Set<string>();
-		let proxies = new Map<string, string>();
-		try {
-			const res = await api("GET", "/services");
-			if (!res.ok) throw new Error(`listing services failed: HTTP ${res.status}`);
-			const listed: any = await res.json();
-			for (const s of listed.vipServices ?? []) if (OWNED.test(String(s.name))) defs.set(String(s.name), s);
-			const status = json((await run("tailscale", ["serve", "status", "--json"])).stdout);
-			for (const [name, svc] of Object.entries<any>(status.Services ?? {})) {
-				if (!OWNED.test(name)) continue;
-				served.add(name);
-				for (const web of Object.values<any>(svc?.Web ?? {})) for (const h of Object.values<any>(web?.Handlers ?? {})) if (h?.Proxy) proxies.set(name, normalise(String(h.Proxy)));
-			}
-			const prefs = json((await run("tailscale", ["debug", "prefs"])).stdout);
-			advertised = new Set<string>((prefs.AdvertiseServices ?? []).filter((n: string) => OWNED.test(String(n))));
-		} catch (err) {
-			// Without a trustworthy picture, change nothing (and above all delete nothing).
-			log(`cannot read the current state, doing nothing this cycle: ${(err as Error).message}`);
-			summary.failed += want.size;
-			return summary;
-		}
-
 		const exec = async (name: string, args: string[], what: string) => {
 			step(`tailscale ${args.join(" ")}`);
 			if (dryRun) return true;
@@ -174,88 +152,166 @@ export function createTailnetServices(options: Options) {
 				return false;
 			}
 		};
+		return { dryRun, summary, failedNames, step, fail, exec };
+	}
 
-		// 1. Remove. "Ours" means this host serves or advertises it (evidence from this machine);
-		// the tailnet-wide definition is deleted only when its comment carries our instance mark,
-		// so another Hamstr's (or anyone's) svc:crumb-* definitions are never touched.
-		const gone = [...new Set([...served, ...advertised])].filter((n) => !want.has(n));
-		const stale = [...defs].filter(([n, d]) => !want.has(n) && isMine(d) && !gone.includes(n)).map(([n]) => n);
-		if (gone.length + stale.length > maxRemovals) {
-			log(`refusing to remove ${gone.length + stale.length} services in one cycle (limit ${maxRemovals}); is the crumb list complete?`);
-			summary.failed += gone.length + stale.length;
-		} else {
-			for (const name of [...gone, ...stale]) {
-				let clean = true;
-				if (served.has(name) || advertised.has(name)) {
-					clean = (await exec(name, ["serve", "drain", name], "drain")) && (await exec(name, ["serve", "clear", name], "clear"));
-				}
-				if (clean && isMine(defs.get(name))) {
-					step(`DELETE ${name}`);
-					if (!dryRun) {
-						try {
-							const res = await api("DELETE", `/services/${name}`);
-							await res.body?.cancel();
-							if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
-						} catch (err) {
-							fail(name, "delete", err);
-							clean = false;
-						}
-					}
-				}
-				if (clean) summary.removed++;
+	/** Desired names, validated; one name per crumb. */
+	function wanted(desired: Desired[], cycle: Cycle) {
+		const want = new Map<string, Desired>();
+		for (const d of desired) {
+			const name = serviceName(d.id);
+			if (!name) {
+				cycle.summary.failed++;
+				log(`skipping crumb id with no valid service name: ${JSON.stringify(String(d.id).slice(0, 40))}`);
+				continue;
 			}
+			want.set(`svc:${name}`, d);
 		}
+		return want;
+	}
 
-		// 2. Define, 3. serve, 4. advertise, per crumb. A definition must exist
-		// before the host advertises it, or the host sticks at "0 hosts" (DockTail #72).
-		for (const [name, d] of want) {
-			let changed = false;
-			const have = defs.get(name);
-			const comment = mark ? `${mark}${d.comment ? ` ${d.comment}` : ""}` : d.comment;
-			if (!have || !sameSet(have.tags ?? [], [tag]) || (comment !== undefined && (have.comment ?? "") !== comment)) {
-				step(`PUT ${name}`);
-				if (!dryRun) {
-					try {
-						// An existing definition keeps its addrs and ports: it is tailnet-wide.
-						const body = have
-							? { name, tags: [tag], ports: have.ports ?? ["tcp:443"], addrs: have.addrs, ...(comment !== undefined ? { comment } : have.comment ? { comment: have.comment } : {}) }
-							: { name, tags: [tag], ports: ["tcp:443"], ...(comment !== undefined && { comment }) };
-						const res = await api("PUT", `/services/${name}`, body);
-						await res.body?.cancel();
-						if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-						changed = true;
-					} catch (err) {
-						fail(name, "define", err);
-						if (!have) continue;
-					}
-				} else changed = true;
-			}
-
-			let isServed = served.has(name) && proxies.get(name) === normalise(upstream);
-			if (!isServed) {
-				changed = true;
-				const args = ["serve", `--service=${name}`, "--https=443", upstream];
-				if (served.has(name)) {
-					await exec(name, ["serve", "clear", name], "clear");
-					advertised.delete(name); // clearing withdraws it: advertise again below
-				}
-				isServed = await exec(name, args, "serve");
-				if (!isServed && !dryRun) {
-					// "already serving" / "want to serve": clear and try once more.
-					advertised.delete(name);
-					if (await exec(name, ["serve", "clear", name], "clear")) isServed = await exec(name, args, "serve");
-				}
-			}
-			if (isServed && !advertised.has(name)) {
-				changed = true;
-				await exec(name, ["serve", "advertise", name], "advertise");
-			}
-			if (failedNames.has(name)) continue;
-			if (changed) summary.added++;
-			else summary.unchanged++;
+	/** The proxy targets and names `tailscale serve status --json` reports for our services. */
+	function readServed(status: any) {
+		const served = new Set<string>();
+		const proxies = new Map<string, string>();
+		for (const [name, svc] of Object.entries<any>(status.Services ?? {})) {
+			if (!OWNED.test(name)) continue;
+			served.add(name);
+			const handlers = Object.values<any>(svc?.Web ?? {}).flatMap((web) => Object.values<any>(web?.Handlers ?? {}));
+			for (const h of handlers) if (h?.Proxy) proxies.set(name, normalise(String(h.Proxy)));
 		}
-		summary.failed += failedNames.size;
-		return summary;
+		return { served, proxies };
+	}
+
+	async function readDefinitions() {
+		const res = await api("GET", "/services");
+		if (!res.ok) throw new Error(`listing services failed: HTTP ${res.status}`);
+		const listed: any = await res.json();
+		const defs = new Map<string, any>();
+		for (const s of listed.vipServices ?? []) if (OWNED.test(String(s.name))) defs.set(String(s.name), s);
+		return defs;
+	}
+
+	/** One read of everything per cycle: definitions, what is served, what is advertised. */
+	async function readState(): Promise<State> {
+		const defs = await readDefinitions();
+		const { served, proxies } = readServed(json((await run("tailscale", ["serve", "status", "--json"])).stdout));
+		const prefs = json((await run("tailscale", ["debug", "prefs"])).stdout);
+		const advertised = new Set<string>((prefs.AdvertiseServices ?? []).filter((n: string) => OWNED.test(String(n))));
+		return { defs, served, advertised, proxies };
+	}
+
+	async function deleteDefinition(name: string, cycle: Cycle) {
+		cycle.step(`DELETE ${name}`);
+		if (cycle.dryRun) return true;
+		try {
+			const res = await api("DELETE", `/services/${name}`);
+			await res.body?.cancel();
+			if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+			return true;
+		} catch (err) {
+			cycle.fail(name, "delete", err);
+			return false;
+		}
+	}
+
+	async function removeOne(name: string, state: State, cycle: Cycle) {
+		let clean = true;
+		if (state.served.has(name) || state.advertised.has(name)) {
+			clean = (await cycle.exec(name, ["serve", "drain", name], "drain")) && (await cycle.exec(name, ["serve", "clear", name], "clear"));
+		}
+		if (clean && isMine(state.defs.get(name))) clean = await deleteDefinition(name, cycle);
+		if (clean) cycle.summary.removed++;
+	}
+
+	/** Remove what is no longer wanted. "Ours" means this host serves or advertises it (evidence
+	 *  from this machine); the tailnet-wide definition is deleted only when its comment carries our
+	 *  instance mark, so another Hamstr's (or anyone's) svc:crumb-* definitions are never touched. */
+	async function removeStale(want: Map<string, Desired>, state: State, cycle: Cycle) {
+		const gone = [...new Set([...state.served, ...state.advertised])].filter((n) => !want.has(n));
+		const stale = [...state.defs].filter(([n, d]) => !want.has(n) && isMine(d) && !gone.includes(n)).map(([n]) => n);
+		const count = gone.length + stale.length;
+		if (count > maxRemovals) {
+			log(`refusing to remove ${count} services in one cycle (limit ${maxRemovals}); is the crumb list complete?`);
+			cycle.summary.failed += count;
+			return;
+		}
+		for (const name of [...gone, ...stale]) await removeOne(name, state, cycle);
+	}
+
+	/** The PUT body. An existing definition keeps its addrs and ports: it is tailnet-wide. */
+	function definitionBody(name: string, have: any, comment: string | undefined) {
+		const keep = comment !== undefined ? { comment } : have?.comment ? { comment: have.comment } : {};
+		if (!have) return { name, tags: [tag], ports: ["tcp:443"], ...keep };
+		return { name, tags: [tag], ports: have.ports ?? ["tcp:443"], addrs: have.addrs, ...keep };
+	}
+
+	/** Create or update the tailnet-wide definition. Returns whether it changed, and whether to go on. */
+	async function define(name: string, d: Desired, have: any, cycle: Cycle): Promise<{ changed: boolean; carryOn: boolean }> {
+		const comment = mark ? `${mark}${d.comment ? ` ${d.comment}` : ""}` : d.comment;
+		if (have && sameSet(have.tags ?? [], [tag]) && (comment === undefined || (have.comment ?? "") === comment)) return { changed: false, carryOn: true };
+		cycle.step(`PUT ${name}`);
+		if (cycle.dryRun) return { changed: true, carryOn: true };
+		try {
+			const res = await api("PUT", `/services/${name}`, definitionBody(name, have, comment));
+			await res.body?.cancel();
+			if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+			return { changed: true, carryOn: true };
+		} catch (err) {
+			cycle.fail(name, "define", err);
+			return { changed: false, carryOn: !!have };
+		}
+	}
+
+	/** Make this host serve the crumb through the upstream. Returns whether it changed and whether it now serves. */
+	async function serve(name: string, state: State, cycle: Cycle) {
+		if (state.served.has(name) && state.proxies.get(name) === normalise(upstream)) return { changed: false, served: true };
+		const args = ["serve", `--service=${name}`, "--https=443", upstream];
+		if (state.served.has(name)) {
+			await cycle.exec(name, ["serve", "clear", name], "clear");
+			state.advertised.delete(name); // clearing withdraws it: advertise again below
+		}
+		let served = await cycle.exec(name, args, "serve");
+		if (!served && !cycle.dryRun) {
+			// "already serving" / "want to serve": clear and try once more.
+			state.advertised.delete(name);
+			if (await cycle.exec(name, ["serve", "clear", name], "clear")) served = await cycle.exec(name, args, "serve");
+		}
+		return { changed: true, served };
+	}
+
+	/** Define, serve, advertise, in that order: a definition must exist before the host
+	 *  advertises it, or the host sticks at "0 hosts" (DockTail #72). */
+	async function ensureOne(name: string, d: Desired, state: State, cycle: Cycle) {
+		const defined = await define(name, d, state.defs.get(name), cycle);
+		if (!defined.carryOn) return;
+		const served = await serve(name, state, cycle);
+		let changed = defined.changed || served.changed;
+		if (served.served && !state.advertised.has(name)) {
+			changed = true;
+			await cycle.exec(name, ["serve", "advertise", name], "advertise");
+		}
+		if (cycle.failedNames.has(name)) return;
+		if (changed) cycle.summary.added++;
+		else cycle.summary.unchanged++;
+	}
+
+	async function reconcile(desired: Desired[], { dryRun = false }: { dryRun?: boolean } = {}): Promise<Summary> {
+		const cycle = newCycle(dryRun);
+		const want = wanted(desired, cycle);
+		let state: State;
+		try {
+			state = await readState();
+		} catch (err) {
+			// Without a trustworthy picture, change nothing (and above all delete nothing).
+			log(`cannot read the current state, doing nothing this cycle: ${(err as Error).message}`);
+			cycle.summary.failed += want.size;
+			return cycle.summary;
+		}
+		await removeStale(want, state, cycle);
+		for (const [name, d] of want) await ensureOne(name, d, state, cycle);
+		cycle.summary.failed += cycle.failedNames.size;
+		return cycle.summary;
 	}
 
 	return { reconcile };
