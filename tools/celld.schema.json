@@ -1,0 +1,68 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://github.com/poesterlin/AppCrumb/blob/main/tools/celld.schema.json",
+	"title": "celld.json",
+	"description": "Describes how tools/pack.ts packs a site for celld. Every field is optional; paths are relative to the site directory. Without a celld.json the SvelteKit adapter-cloudflare layout is assumed.",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"$schema": { "type": "string", "description": "Editor hint: a path or URL of this schema." },
+		"worker": {
+			"type": ["string", "null"],
+			"minLength": 1,
+			"description": "Server entry module with `export default { fetch }`. Omit it, or set null, for a static-only site."
+		},
+		"assets": {
+			"type": "string",
+			"minLength": 1,
+			"description": "Directory of static files, served before the worker. A worker, assets, or both are required."
+		},
+		"objects": {
+			"type": "string",
+			"minLength": 1,
+			"description": "Module exporting the site's Durable Object classes. Needs a worker."
+		},
+		"exclude": {
+			"type": "array",
+			"items": { "type": "string", "minLength": 1 },
+			"default": [],
+			"description": "Asset paths (relative to `assets`) never to serve, in addition to _worker.js, _routes.json, _headers, _redirects and .assetsignore."
+		},
+		"immutable": {
+			"type": "array",
+			"items": { "type": "string", "minLength": 1 },
+			"description": "Path prefixes of content-hashed files, served with a 1-year cache. Default: whichever of _app/immutable/ and _nuxt/ exist, plus assets/ if every file in it has a hash in its name."
+		},
+		"mutable": {
+			"type": "array",
+			"items": { "type": "string", "minLength": 1 },
+			"default": [],
+			"description": "Exact paths under the immutable prefixes that change between builds (never cached for long). _nuxt/builds/latest.json is always added."
+		},
+		"compatibilityDate": {
+			"type": "string",
+			"pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+			"default": "2026-10-01",
+			"description": "workerd compatibility date, YYYY-MM-DD."
+		},
+		"auth": {
+			"enum": ["required", "optional"],
+			"description": "\"required\": visitors sign in first. \"optional\": everyone gets in and signed-in people are recognised. Unset: the site is public. Recorded per site on activation, not in the version."
+		},
+		"check": {
+			"anyOf": [{ "const": false }, { "type": "string", "pattern": "^/" }],
+			"default": "/",
+			"description": "Path a deploy requests on the new version before activating it, and probes on the live site after. false skips both."
+		},
+		"notFound": {
+			"enum": ["none", "spa"],
+			"default": "none",
+			"description": "\"spa\": a static-only site answers navigations to unknown paths with index.html (client-side routing)."
+		},
+		"minify": {
+			"type": "boolean",
+			"default": false,
+			"description": "Minify the bundled server code, for big builds near the 16 MiB code limit."
+		}
+	}
+}

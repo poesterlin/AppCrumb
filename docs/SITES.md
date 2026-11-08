@@ -40,6 +40,12 @@ relative to the site directory):
 | `minify` | `true` minifies the bundled server code (default `false`), for big builds near the 16 MiB code limit. |
 | `exclude` | Asset paths never to serve (adapters' `_worker.js`, `_routes.json`, `_headers`, `_redirects`, `.assetsignore` are always excluded). |
 
+Every field is optional, and an unknown field is an error (a typo such as
+`"immutible"` fails the deploy instead of being ignored). The schema is
+[`tools/celld.schema.json`](../tools/celld.schema.json); point an editor at it
+for completion and checking with `"$schema": "../../tools/celld.schema.json"`
+(adjust the path).
+
 Without `celld.json` the SvelteKit `adapter-cloudflare` layout is assumed.
 EmDash (Astro) sites need more than a `celld.json`: deploy them with
 `tools/deploy-emdash.sh` (docs/OPERATIONS.md, "EmDash sites").

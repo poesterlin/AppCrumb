@@ -9,7 +9,8 @@
 //               uploads only the ones the router doesn't have yet)
 // Symlinks in the static directory and files over 20 MiB are refused.
 //
-// <site-dir>/celld.json (optional; paths relative to the site directory):
+// <site-dir>/celld.json (optional; paths relative to the site directory; unknown
+// fields are an error; tools/celld.schema.json describes it for editors):
 //   worker     server entry module with `export default { fetch }`.
 //              Omit, or set to null, for a static-only site.
 //   assets     directory of static files, served before the worker.
@@ -38,7 +39,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { validate } from "./schema.ts";
 
 const siteDir = resolve(process.argv[2] ?? ".");
 const outDir = process.argv[3] ? resolve(process.argv[3]) : undefined;
@@ -56,6 +58,9 @@ const config = existsSync(configFile)
 			assets: ".svelte-kit/cloudflare",
 			objects: existsSync(join(siteDir, "src/objects.ts")) ? "src/objects.ts" : undefined,
 		};
+// Fields and types come from tools/celld.schema.json (also usable as an editor
+// schema). The checks below say more for the few mistakes that are common.
+const schemaProblems = validate(JSON.parse(readFileSync(join(dirname(new URL(import.meta.url).pathname), "celld.schema.json"), "utf8")), config);
 const { notFound = "none", exclude = [], compatibilityDate = "2026-10-01", check = "/", minify = false, auth } = config;
 if (typeof minify !== "boolean") fail("minify must be true or false");
 if (check !== false && (typeof check !== "string" || !check.startsWith("/"))) fail(`check must be a path starting with "/", or false`);
@@ -63,6 +68,7 @@ if (auth !== undefined && auth !== "required" && auth !== "optional") fail(`auth
 if (notFound !== "none" && notFound !== "spa") fail(`notFound must be "none" or "spa"`);
 // celld 0.6.3 accepts any string here (even a non-date), so check it ourselves.
 if (typeof compatibilityDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(compatibilityDate)) fail("compatibilityDate must be YYYY-MM-DD");
+if (schemaProblems.length) fail(`celld.json is invalid:\n  ${schemaProblems.join("\n  ")}`);
 // Files that sit under an immutable prefix but change with every build.
 const ALWAYS_MUTABLE = ["_nuxt/builds/latest.json"];
 const mutable = [...new Set([...(config.mutable ?? []), ...ALWAYS_MUTABLE])];
