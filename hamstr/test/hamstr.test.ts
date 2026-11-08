@@ -842,8 +842,8 @@ describe("stores settings", () => {
 });
 
 // Races and retries: states the code could reach when two requests overlap.
-// See docs/STATE-MACHINES.md. The mock node holds a call open (celld.gate) so the
-// interleaving is exact, not left to timing.
+// The mock node holds a call open (celld.gate) so the interleaving is exact,
+// not left to timing.
 describe("races and retries", () => {
 	/** Holds the first admin call for which `match` is true until `release()`. */
 	function hold(match: (path: string, query: Record<string, string>) => boolean) {

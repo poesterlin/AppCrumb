@@ -21,6 +21,16 @@ export interface StoreInput {
 	active?: boolean;
 }
 
+/** A row as node:sqlite hands it over; `rowOf` turns it into a `StoreRow`. */
+interface StoreDatabaseRow {
+	id: string;
+	url: string;
+	public_url: string;
+	name: string;
+	active: number;
+	created_at: string;
+}
+
 interface StoresDeps {
 	db: DatabaseSync;
 	randomId: (length?: number) => string;
@@ -85,7 +95,7 @@ export function createStores({ db, randomId, now, audit, HttpError }: StoresDeps
 		if (!row) return null;
 		return { id: row.id, url: row.url, publicUrl: row.public_url, name: row.name, active: !!row.active, createdAt: row.created_at };
 	}
-	const get = (id: string) => db.prepare("SELECT * FROM stores WHERE id = ?").get(id);
+	const get = (id: string) => db.prepare("SELECT * FROM stores WHERE id = ?").get(id) as unknown as StoreDatabaseRow | undefined;
 	const list = () => db.prepare("SELECT * FROM stores ORDER BY lower(name), url").all().map(rowOf) as StoreRow[];
 	const active = () => rowOf(db.prepare("SELECT * FROM stores WHERE active = 1 LIMIT 1").get());
 

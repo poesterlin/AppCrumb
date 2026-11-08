@@ -184,6 +184,17 @@ tools/deploy-emdash.sh ../emdash-site blog.example.com
 Watch the volume size. Each database write adds a few KB, and celld does not clean these up yet.
 Old site versions stay until you prune them.
 
+## Health
+
+```sh
+tools/doctor.sh       # containers, bucket, every site, disk, backups; read-only
+```
+
+It exits 1 when a check fails, so it can run from cron or before an update.
+`CELLD_COMPOSE_DIR` points it at another checkout, `CELLD_BACKUP_DIR` says where
+the archives are, and `DOCTOR_BACKUP_MAX_DAYS` (default 7) is how stale a backup
+may be before it warns.
+
 ## Tests
 
 ```sh
