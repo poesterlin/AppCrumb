@@ -13,7 +13,7 @@ const text = (status, body) => new Response(body, { status, headers: { "content-
  *  shell is the same host on the public port. */
 function shellOriginFor(core, event) {
 	if (!core.home) return core.shellOrigin;
-	const hostname = String(event.locals.browserHost ?? "").replace(/:\d+$/, "");
+	const hostname = core.homeShellHost(event.locals.browserHost);
 	return `http://${hostname}${core.config.publicPort ? `:${core.config.publicPort}` : ""}`;
 }
 
@@ -25,7 +25,13 @@ function frameAncestorsFor(core, shellOrigin) {
 }
 
 /** The crumb's own origin. In home mode, the host and port the browser used. */
-const crumbOriginFor = (core, event, crumb) => (core.home ? `http://${event.locals.browserHost}` : core.crumbOrigin(crumb.id));
+const crumbOriginFor = (core, event, crumb) => {
+	if (!core.home) return core.crumbOrigin(crumb.id);
+	// Tailscale Services answer on https; everything else in home mode is plain http.
+	const host = String(event.locals.browserHost ?? "");
+	const https = core.tailnetDomain && host.replace(/:\d+$/, "").endsWith(`.${core.tailnetDomain}`);
+	return `${https ? "https" : "http"}://${host}`;
+};
 
 function crumbNotice(core, status, crumb, message, shellOrigin = core.shellOrigin) {
 	const target = `${shellOrigin}/c/${crumb.id}`;

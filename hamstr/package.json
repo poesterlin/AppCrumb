@@ -8,6 +8,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"start": "node server.ts",
+		"tailnet-sync": "node tools/tailnet-sync.ts",
 		"prepare": "svelte-kit sync || echo ''",
 		"test": "npm run build && node --test test/*.test.ts",
 		"e2e": "npm run build && node test/e2e.ts",

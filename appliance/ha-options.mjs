@@ -13,6 +13,8 @@ const map = {
 	acme_email: "ACME_EMAIL",
 	hamstr_host: "HAMSTR_HOST",
 	crumb_domain: "HAMSTR_CRUMB_DOMAIN",
+	home_names: "HAMSTR_HOME_NAMES",
+	home_address: "HAMSTR_HOME_ADDRESS",
 	oidc_name: "OIDC_NAME",
 	oidc_issuer: "OIDC_ISSUER",
 	oidc_client_id: "OIDC_CLIENT_ID",

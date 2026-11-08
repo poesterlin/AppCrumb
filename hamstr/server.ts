@@ -9,7 +9,8 @@
 //   HAMSTR_HOST            the shell: UI, JSON API, sign-in
 //   crumb-<id>.<domain>    a crumb: /.hamstr/enter, then everything is proxied
 // In home mode (HAMSTR_AUTH=none) the shell answers on any hostname, and each
-// crumb has a port of its own instead (HAMSTR_CRUMB_PORTS) on every interface.
+// crumb has a port of its own instead (HAMSTR_CRUMB_PORTS) on every interface,
+// or, with HAMSTR_HOME_NAMES, a name like crumb-<id>.192-168-1-5.sslip.io.
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
@@ -154,6 +155,14 @@ export function createHamstr(options: any = {}) {
 				// Crumb hosts are proxied here, before SvelteKit: its CSRF check
 				// runs before hooks and would refuse the crumbs' own form posts.
 				// (vite dev skips that check, so hooks handles crumbs there.)
+				// Home mode with names: crumb-<id>.<ip>.sslip.io on the shell's own port.
+				const homeCrumb = core.homeCrumbId(host);
+				if (homeCrumb) {
+					const browserHost = String(req.headers.host).toLowerCase();
+					req.headers.host = core.crumbHost(homeCrumb);
+					runWithCore(core, () => serveCrumb(core, homeCrumb, req, res, browserHost)).catch(crumbFailed(res));
+					return;
+				}
 				const crumb = core.crumbPattern.exec(host);
 				if (crumb) {
 					runWithCore(core, () => serveCrumb(core, crumb[1], req, res)).catch(crumbFailed(res));

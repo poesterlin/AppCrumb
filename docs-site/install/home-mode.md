@@ -23,6 +23,19 @@ Open `http://<box>:8000`.
   `HAMSTR_CRUMB_PORTS`, and Caddy starts listening on it. A separate port is a separate origin, so crumbs stay
   isolated from each other and from the shell.
 
+## Names instead of ports (optional)
+
+Pick it in *Settings → Addresses* (it has a Test button), or start with `HAMSTR_HOME_NAMES=sslip.io` (or `nip.io`) as the default. Each crumb opens at
+`http://crumb-<id>.192-168-1-5.sslip.io:8000` instead of on its own port. Those services answer DNS queries for
+such names with the address inside them, so there is nothing to set up, only one port to publish, and each crumb is
+still an origin of its own.
+
+- Open Hamstr by the box's IP address, or set `HAMSTR_HOME_ADDRESS` (IPv4) when you use a name such as
+  `homeassistant.local`. Without an address it falls back to ports.
+- It needs working internet DNS and a third party's name service.
+- Some routers refuse public names that resolve to private addresses (DNS rebinding protection). Then the names fail
+  and you should keep ports or allow the domain in the router.
+
 ## What does not work
 
 Browsers only grant some features on secure origins:

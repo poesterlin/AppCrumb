@@ -7,6 +7,7 @@
 		{ href: "/settings/groups", label: "Groups" },
 		{ href: "/settings/sites", label: "Sites" },
 		{ href: "/settings/stores", label: "Stores" },
+		...(data.home ? [{ href: "/settings/addresses", label: "Addresses" }] : []),
 		{ href: "/settings/sign-in", label: "Sign-in" },
 		{ href: "/settings/activity", label: "Activity" },
 	]);

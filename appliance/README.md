@@ -57,6 +57,7 @@ Release: tag `vX.Y.Z`, then set `version` in `ha-addon/config.yaml` to it.
 | --- | --- | --- |
 | `HAMSTR_AUTH` | `required` | `none`: home mode (below) |
 | `HAMSTR_CRUMB_PORTS` | `20000-20999` | Home mode: the ports crumbs get |
+| `HAMSTR_HOME_NAMES`, `HAMSTR_HOME_ADDRESS` | `off` | Home mode: `sslip.io` or `nip.io` gives each crumb a name instead of a port ([below](#home-mode)). The address is the box's IPv4, for when you open Hamstr by a name |
 | `HTTP_PORT`, `HTTPS_PORT` | `8000`, `8443` | The ports for browsers. Everything else is on loopback, ports 47101-47181, except the panel below |
 | `CELLD_LOG` | `warn` | celld's log level (`RUST_LOG`); `info` adds its routine lines, several a second |
 | `TLS_MODE` | `off` | `off`: HTTP on :8000, for a proxy in front that terminates TLS. `names`: a name from a Hamstr names service (`NAME_SERVICE_URL`). `domain`: your own domain at a DNS provider |
@@ -87,6 +88,15 @@ one) restarts the container, since Hamstr was started for the old one.
   isolated from each other and from the shell without hostnames. They are not
   isolated in cookies, which browsers share across ports; apps get their
   identity from Hamstr, not from cookies.
+- Optionally, names instead of ports, chosen in Settings → Addresses (with a Test
+  button; the choice is stored and beats the environment): `HAMSTR_HOME_NAMES=sslip.io` (or `nip.io`)
+  opens a crumb at `http://crumb-<id>.192-168-1-5.sslip.io:8000`, on the shell's
+  own port, when you reached Hamstr by its IP address (or set
+  `HAMSTR_HOME_ADDRESS`). The service's public DNS answers `192.168.1.5`, so
+  nothing to set up, and each crumb is still its own origin. It needs internet
+  DNS, a third party's name service, and a router that lets public names
+  resolve to private addresses (some block that as DNS rebinding protection).
+  Off by default; with it on, no crumb ports are used.
 - Publish the crumb ports, or use the host's network (`--network host`, which
   the Home Assistant add-on does).
 

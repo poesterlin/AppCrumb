@@ -41,6 +41,8 @@ schema:
   acme_email: email?
   hamstr_host: str?
   crumb_domain: str?
+  home_names: list(off|sslip.io|nip.io)?
+  home_address: str?
   oidc_name: str?
   oidc_issuer: url?
   oidc_client_id: str?

@@ -115,9 +115,28 @@ export interface CoreOptions {
 	auth?: string;
 	/** Home mode: the port range for crumbs, e.g. "20000-20999". */
 	crumbPorts?: string;
+	/** Home mode: "sslip.io" or "nip.io" gives each crumb a hostname
+	 *  (crumb-<id>.192-168-1-5.sslip.io) instead of a port; "off" (default) keeps ports. */
+	homeNames?: string;
+	/** Home mode, names on: the box's IPv4 address, for when the browser reached
+	 *  the shell by a name (homeassistant.local) and not an address. */
+	homeAddress?: string;
+	/** Home mode: a tailnet's MagicDNS name (siren-macaroni.ts.net). Crumbs also
+	 *  answer on crumb-<id>.<this>, served by Tailscale Services (docs/tailnet-services.md). */
+	tailnetDomain?: string;
 	sitesApi?: string;
 	logging?: boolean;
 }
+
+/** A unicast dotted IPv4 address, or null: each part 0-255 without leading zeros
+ *  (010 would be a second spelling of the same host), and not 0.0.0.0 or the broadcast address. */
+function ipv4(text) {
+	const m = /^(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})$/.exec(String(text));
+	if (!m || !m.slice(1).every((n) => Number(n) <= 255)) return null;
+	return text === "0.0.0.0" || text === "255.255.255.255" ? null : text;
+}
+/** Hosts a rebinding page cannot make the browser use: an address, localhost, mDNS (.local) and tailnet names. */
+const trustedHost = (host) => !!ipv4(host) || host === "localhost" || host.endsWith(".local") || host.endsWith(".ts.net") || host.startsWith("[");
 
 export function createCore(options: CoreOptions = {}) {
 	const env = process.env;
@@ -147,10 +166,16 @@ export function createCore(options: CoreOptions = {}) {
 		admins: options.admins ?? list(env.HAMSTR_ADMINS),
 		auth: String(options.auth ?? env.HAMSTR_AUTH ?? "required"),
 		crumbPorts: String(options.crumbPorts ?? env.HAMSTR_CRUMB_PORTS ?? "20000-20999"),
+		homeNames: String(options.homeNames ?? env.HAMSTR_HOME_NAMES ?? "off").toLowerCase(),
+		homeAddress: String(options.homeAddress ?? env.HAMSTR_HOME_ADDRESS ?? ""),
+		tailnetDomain: String(options.tailnetDomain ?? env.HAMSTR_TAILNET_DOMAIN ?? "").toLowerCase().replace(/^\.+|\.+$/g, ""),
 		logging: options.logging !== false,
 	};
 	if (!["required", "none"].includes(config.auth)) throw new Error('HAMSTR_AUTH must be "required" or "none"');
 	const home = config.auth === "none";
+	if (!["off", "sslip.io", "nip.io"].includes(config.homeNames)) throw new Error('HAMSTR_HOME_NAMES must be "off", "sslip.io" or "nip.io"');
+	if (config.tailnetDomain && !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/.test(config.tailnetDomain)) throw new Error("HAMSTR_TAILNET_DOMAIN must be a tailnet name like siren-macaroni.ts.net");
+	if (config.homeAddress && !ipv4(config.homeAddress)) throw new Error("HAMSTR_HOME_ADDRESS must be an IPv4 address like 192.168.1.5");
 	const portRange = /^(\d+)-(\d+)$/.exec(config.crumbPorts);
 	if (!portRange || Number(portRange[1]) < 1024 || Number(portRange[2]) > 65535 || Number(portRange[1]) > Number(portRange[2])) {
 		throw new Error('HAMSTR_CRUMB_PORTS must be a range like "20000-20999"');
@@ -172,6 +197,35 @@ export function createCore(options: CoreOptions = {}) {
 	const crumbHost = (id) => `${config.crumbPrefix}${id}.${config.crumbDomain}`;
 	const crumbOrigin = (id) => `${config.scheme}://${crumbHost(id)}${portSuffix}`;
 	const crumbPattern = new RegExp(`^${config.crumbPrefix}([a-z0-9]{12})\\.${config.crumbDomain.replace(/[.]/g, "\\.")}$`);
+	// Home mode with names: crumb-<id>.<a-b-c-d>.<sslip.io|nip.io>. The wildcard
+	// DNS service answers with a.b.c.d, so each crumb is an origin of its own
+	// without any DNS or certificate of ours.
+	// Chosen in Settings → Addresses (stored in the database); the environment is the default.
+	let homeNet = { names: config.homeNames, address: config.homeAddress };
+	let homePatternFor = "";
+	let homePattern = null;
+	/** The crumb id in a home-mode name, or null. */
+	const tailnetPattern = config.tailnetDomain ? new RegExp(`^${config.crumbPrefix}([a-z0-9]{12})\\.${config.tailnetDomain.replace(/[.]/g, "\\.")}$`) : null;
+	const homeCrumbId = (host) => {
+		const viaTailnet = home && tailnetPattern ? tailnetPattern.exec(host) : null;
+		if (viaTailnet) return viaTailnet[1];
+		if (!home || homeNet.names === "off") return null;
+		if (homePatternFor !== homeNet.names) {
+			homePatternFor = homeNet.names;
+			homePattern = new RegExp(`^${config.crumbPrefix}([a-z0-9]{12})\\.(\\d{1,3}-\\d{1,3}-\\d{1,3}-\\d{1,3})\\.${homeNet.names.replace(/[.]/g, "\\.")}$`);
+		}
+		const m = homePattern.exec(host);
+		return m && ipv4(m[2].replace(/-/g, ".")) ? m[1] : null;
+	};
+	/** The host of the shell, for a browser that reached a crumb by one of the home-mode names:
+	 *  the address inside an sslip.io/nip.io name, else the configured address, else the host itself. */
+	const homeShellHost = (hostWithPort) => {
+		const host = String(hostWithPort ?? "").toLowerCase().replace(/:\d+$/, "");
+		const named = /^[a-z0-9-]+\.(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})\.(?:sslip|nip)\.io$/.exec(host);
+		if (named && ipv4(named[1].replace(/-/g, "."))) return named[1].replace(/-/g, ".");
+		if (tailnetPattern?.test(host)) return homeNet.address || config.homeAddress || host;
+		return host;
+	};
 	const SHELL_COOKIE = secure ? "__Host-hamstr" : "hamstr";
 	const CRUMB_COOKIE = secure ? "__Host-hamstr_crumb" : "hamstr_crumb";
 	const cookieAttrs = `Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
@@ -239,11 +293,38 @@ export function createCore(options: CoreOptions = {}) {
 			path TEXT NOT NULL, expires_at INTEGER NOT NULL);
 		CREATE TABLE IF NOT EXISTS crumb_ports (
 			crumb_id TEXT PRIMARY KEY REFERENCES crumbs(id) ON DELETE CASCADE, port INTEGER UNIQUE NOT NULL);
+		CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 		CREATE TABLE IF NOT EXISTS crumb_sessions (
 			hash TEXT PRIMARY KEY, crumb_id TEXT NOT NULL REFERENCES crumbs(id) ON DELETE CASCADE,
 			user_id TEXT, parent TEXT, public_id TEXT NOT NULL,
 			created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
 	`);
+	try {
+		const saved = db.prepare("SELECT value FROM settings WHERE key = 'home_network'").get();
+		if (saved) {
+			const value = JSON.parse(String(saved.value));
+			// Checked again: the table is data, not code.
+			if (["off", "sslip.io", "nip.io"].includes(value?.names) && (!value.address || ipv4(value.address))) homeNet = { names: value.names, address: String(value.address ?? "") };
+		}
+	} catch {
+		// A damaged value falls back to the environment's.
+	}
+	/** Home mode: how crumbs are addressed (Settings → Addresses). */
+	const homeNetwork = () => ({ home, names: homeNet.names, address: homeNet.address });
+	/** `host` is the Host header of the request: a page the browser reached through a name an
+	 *  attacker controls (DNS rebinding) must not change where every crumb opens. */
+	function setHomeNetwork(input, host = "") {
+		const hostname = String(host).toLowerCase().replace(/:\d+$/, "");
+		if (host && !trustedHost(hostname)) throw new HttpError(403, "Open Hamstr by its IP address (or a .local or tailnet name) to change this.");
+		if (!home) throw new HttpError(409, "Crumbs are addressed by hostname when sign-in is on; this is for home mode.");
+		const names = String(input?.names ?? "off").toLowerCase();
+		const address = String(input?.address ?? "").trim();
+		if (!["off", "sslip.io", "nip.io"].includes(names)) throw new HttpError(400, "Pick ports, sslip.io or nip.io.");
+		if (address && !ipv4(address)) throw new HttpError(400, "The address must be an IPv4 address like 192.168.1.5.");
+		homeNet = { names, address };
+		db.prepare("INSERT INTO settings (key, value) VALUES ('home_network', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(homeNet));
+		return homeNetwork();
+	}
 	// Share links were removed: drop their tables and columns from databases that
 	// still have them (new databases never create them). Tickets are short-lived,
 	// so dropping share_id from them and from crumb_sessions loses nothing.
@@ -892,6 +973,11 @@ export function createCore(options: CoreOptions = {}) {
 		if (home) {
 			db.prepare("UPDATE crumbs SET opened_at = ? WHERE id = ?").run(now(), crumb.id);
 			const hostname = String(host).replace(/:\d+$/, "") || "localhost";
+			const address = ipv4(hostname) ? hostname : homeNet.address;
+			if (homeNet.names !== "off" && address) {
+				const port = /:\d+$/.exec(String(host))?.[0] ?? "";
+				return `http://${config.crumbPrefix}${crumb.id}.${address.replace(/\./g, "-")}.${homeNet.names}${port}${safePath(path)}`;
+			}
 			return `http://${hostname}:${crumbPort(crumb.id)}${safePath(path)}`;
 		}
 		const value = token();
@@ -989,6 +1075,11 @@ export function createCore(options: CoreOptions = {}) {
 		crumbHost,
 		crumbOrigin,
 		crumbPattern,
+		homeCrumbId,
+		homeShellHost,
+		tailnetDomain: config.tailnetDomain,
+		homeNetwork,
+		setHomeNetwork,
 		// Home mode: crumbs are other ports of whatever host the browser uses.
 		crumbSources: home ? "http:" : `${config.scheme}://*.${config.crumbDomain}${portSuffix}`,
 		home,

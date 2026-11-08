@@ -29,6 +29,12 @@ configuration:
   crumb_domain:
     name: Crumb domain
     description: Only with tls_mode off and sign-in required.
+  home_names:
+    name: Crumb names (no sign-in only)
+    description: "sslip.io or nip.io: each app gets a name like crumb-abc.192-168-1-5.sslip.io instead of a port. Needs internet DNS; some routers block it. Empty or off keeps ports."
+  home_address:
+    name: Address for crumb names
+    description: This box's IPv4 address, needed when you open Hamstr by a name such as homeassistant.local. Empty uses the address in your browser's URL.
   oidc_name:
     name: Sign-in provider name
     description: Shown on the sign-in button, for example Tailscale.
