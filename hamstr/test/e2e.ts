@@ -3,7 +3,7 @@
 //
 //   node hamstr/test/e2e.ts      (needs celld on PATH and tools' npm deps)
 //
-// Installs test/fixtures/pinboard, makes two crumbs, pins through the proxy as the
+// Installs test/fixtures/pinboard, makes a board (one per person), pins through the proxy as the
 // owner, shares a view-only link with a guest, and checks isolation and cleanup.
 // Never touches the compose stack.
 import assert from "node:assert/strict";
@@ -94,7 +94,9 @@ try {
 	t = performance.now();
 	const kitchen = (await api(ada, "POST", "/api/crumbs", { slug: "pinboard", title: "Kitchen" })).json.crumb;
 	console.log(`created crumb ${kitchen.id}: ${ms(t)}`);
-	const garage = (await api(ada, "POST", "/api/crumbs", { slug: "pinboard", title: "Garage" })).json.crumb;
+	// Pinboard is one per person: a second board is refused.
+	const second = await api(ada, "POST", "/api/crumbs", { slug: "pinboard", title: "Garage" });
+	assert.equal(second.status, 409, second.text);
 
 	// The crumb is invisible to anything but the proxy.
 	assert.equal((await node.request("GET", "/", { host: host(kitchen.id) })).status, 404);
@@ -141,16 +143,24 @@ try {
 	// The app keeps working on restored data.
 	assert.equal((await ada.request("POST", "/pin", { host: host(kitchen.id), headers: FORM, body: "text=Still+works&color=sun" })).status, 303);
 	assert.match((await ada.request("GET", "/", { host: host(kitchen.id) })).text, /Still works/);
-	// Import: a new board from the backup.
+	// Import: a new board from the backup. One per person, so only once the
+	// kitchen board is in the trash.
+	assert.equal((await upload("POST", "/api/apps/pinboard/import")).status, 409);
+	assert.equal((await api(ada, "POST", `/api/crumbs/${kitchen.id}/trash`, {})).status, 200);
 	const imported = await upload("POST", "/api/apps/pinboard/import");
 	assert.equal(imported.status, 201, imported.text);
 	const copy = imported.json.crumb;
 	await go(ada, (await api(ada, "POST", `/api/crumbs/${copy.id}/open`, { path: "/" })).json.url);
 	const copyBoard = (await ada.request("GET", "/", { host: host(copy.id) })).text;
 	assert.match(copyBoard, /Buy oat milk/);
+	// Crumbs do not share data: the copy has the backup, not later pins.
 	assert.doesNotMatch(copyBoard, /Still works/);
-	await api(ada, "POST", `/api/crumbs/${copy.id}/trash`, {});
-	assert.equal((await api(ada, "DELETE", `/api/crumbs/${copy.id}`)).status, 200);
+	// The kitchen board cannot come back while the copy is live.
+	assert.equal((await api(ada, "POST", `/api/crumbs/${kitchen.id}/restore`, {})).status, 409);
+	assert.equal((await api(ada, "POST", `/api/crumbs/${copy.id}/trash`, {})).status, 200);
+	assert.equal((await api(ada, "POST", `/api/crumbs/${kitchen.id}/restore`, {})).status, 200);
+	// Trash ends the board's sessions, so open it again.
+	await go(ada, (await api(ada, "POST", `/api/crumbs/${kitchen.id}/open`, { path: "/" })).json.url);
 
 	t = performance.now();
 	const N = 50;
@@ -161,27 +171,22 @@ try {
 	const direct = (performance.now() - t) / N;
 	console.log(`GET /whoami, mean of ${N}: ${viaProxy.toFixed(1)} ms through Hamstr, ${direct.toFixed(1)} ms straight to celld`);
 
-	// Crumbs do not share data.
-	await go(ada, (await api(ada, "POST", `/api/crumbs/${garage.id}/open`, { path: "/" })).json.url);
-	assert.match((await ada.request("GET", "/", { host: host(garage.id) })).text, /Nothing pinned yet/);
-
 	// Nobody else gets in: another signed-in person cannot open the board.
 	const eve = await signIn({ sub: "u-eve", email: "eve@example.com", name: "Eve" });
 	assert.equal((await api(eve, "POST", `/api/crumbs/${kitchen.id}/open`, { path: "/" })).status, 404);
 	assert.equal((await eve.request("GET", "/", { host: host(kitchen.id) })).status, 401);
 
 	// Delete forever: the celld site and its objects are gone.
-	await api(ada, "POST", `/api/crumbs/${garage.id}/trash`, {});
-	assert.equal((await api(ada, "DELETE", `/api/crumbs/${garage.id}`)).status, 200);
-	assert.equal((await node.request("GET", "/", { host: host(garage.id), headers: { "x-celld-proxy-token": node.proxyToken } })).status, 404);
+	assert.equal((await api(ada, "DELETE", `/api/crumbs/${copy.id}`)).status, 200);
+	assert.equal((await node.request("GET", "/", { host: host(copy.id), headers: { "x-celld-proxy-token": node.proxyToken } })).status, 404);
 	const overview = (await node.admin("GET", "/overview")).json();
 	const sites = overview.sites.map((s) => s.id);
 	assert.ok(sites.includes(host(kitchen.id)), "the remaining crumb is listed");
-	assert.ok(!sites.includes(host(garage.id)), "deleted crumb is not listed");
+	assert.ok(!sites.includes(host(copy.id)), "deleted crumb is not listed");
 	assert.ok(!sites.some((s) => s.includes("probe")), "install probe was cleaned up");
 	assert.ok(overview.objects.some((o) => o.site === host(kitchen.id) && o.className === "Board"), "the kitchen board has its object");
-	assert.ok(!overview.objects.some((o) => o.site === host(garage.id)), "deleted crumb left no objects");
-	assert.ok(!overview.deploys.some((d) => d.site === host(garage.id) || d.site.includes("probe")), "no deploy history left behind");
+	assert.ok(!overview.objects.some((o) => o.site === host(copy.id)), "deleted crumb left no objects");
+	assert.ok(!overview.deploys.some((d) => d.site === host(copy.id) || d.site.includes("probe")), "no deploy history left behind");
 
 	// Pinboard is single-instance: Home opens the one board that is left.
 	const opened = await api(ada, "POST", "/api/apps/pinboard/open", {});
