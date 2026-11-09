@@ -125,11 +125,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: "**/package-lock.json"
-      - name: Install dependencies (store, CLI, pack, the example site)
+      - name: Install dependencies (store, CLI, pack, the example site, the pinboard fixture)
         run: |
           for dir in tools packages/app-format store store/cli sites/example; do
             npm ci --prefix "$dir" --no-audit --no-fund
           done
+          npm install --prefix store/test/fixtures/pinboard --no-audit --no-fund
       - name: Build the appliance image
         run: docker build -f appliance/Dockerfile -t celld-appliance .
       - name: End to end (TLS_MODE=off)
