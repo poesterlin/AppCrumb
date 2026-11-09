@@ -7,8 +7,8 @@
 //   3. activate it;
 //   4. watch: probe the live site every 2 s for `watch` seconds and roll back to
 //      the previous version on a 5xx.
-import { request as httpRequest } from "node:http";
-import { request as httpsRequest } from "node:https";
+import { request as httpRequest, type ClientRequest, type IncomingMessage } from "node:http";
+import { request as httpsRequest, type RequestOptions } from "node:https";
 import { gunzipSync } from "node:zlib";
 import { extract } from "tar-stream";
 
@@ -31,7 +31,9 @@ export interface AdminClientOptions {
 export function adminClient({ api, token, adminHost = "admin.internal", timeoutMs = 120_000 }: AdminClientOptions): AdminClient {
 	const base = new URL(api);
 	if (base.protocol !== "http:" && base.protocol !== "https:") throw new Error(`the node's admin URL must be http(s): ${api}`);
-	const request = base.protocol === "https:" ? httpsRequest : httpRequest;
+	// https.RequestOptions extends http's, so `servername` is fine for both.
+	const request: (options: RequestOptions, callback: (res: IncomingMessage) => void) => ClientRequest =
+		base.protocol === "https:" ? httpsRequest : httpRequest;
 
 	// fetch() cannot set the Host header, and the router picks the admin API by it.
 	interface SendOptions { body?: string; type?: string; host?: string; auth?: boolean; accept?: string }

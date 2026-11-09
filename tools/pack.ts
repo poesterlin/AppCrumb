@@ -39,8 +39,10 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { validate } from "./schema.ts";
+// Imported, not read from disk, so the bundled CLI (dist/pack.mjs) carries it.
+import celldSchema from "./celld.schema.json" with { type: "json" };
 
 const siteDir = resolve(process.argv[2] ?? ".");
 const outDir = process.argv[3] ? resolve(process.argv[3]) : undefined;
@@ -60,7 +62,7 @@ const config = existsSync(configFile)
 		};
 // Fields and types come from tools/celld.schema.json (also usable as an editor
 // schema). The checks below say more for the few mistakes that are common.
-const schemaProblems = validate(JSON.parse(readFileSync(join(dirname(new URL(import.meta.url).pathname), "celld.schema.json"), "utf8")), config);
+const schemaProblems = validate(celldSchema, config);
 const { notFound = "none", exclude = [], compatibilityDate = "2026-10-01", check = "/", minify = false, auth } = config;
 if (typeof minify !== "boolean") fail("minify must be true or false");
 if (check !== false && (typeof check !== "string" || !check.startsWith("/"))) fail(`check must be a path starting with "/", or false`);
