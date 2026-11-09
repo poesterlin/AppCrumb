@@ -55,6 +55,7 @@ before(async () => {
 		crumbPorts: `${FIRST_PORT}-${FIRST_PORT + 2}`,
 		homeNames: "sslip.io",
 		tailnetDomain: "siren-macaroni.ts.net",
+		tailnetShell: "hamstr.siren-macaroni.ts.net",
 		homeAddress: "192.168.1.5",
 		crumbListenHost: "127.0.0.1",
 		logging: false,
@@ -132,11 +133,33 @@ describe("home mode with names", () => {
 		assert.equal(other.json?.user?.name, "Owner", "another tailnet's name is just the shell");
 	});
 
+	it("opens a crumb on its Tailscale Services name when the shell was reached over the tailnet", async () => {
+		const open = async (host: string) => (await api("POST", `/api/crumbs/${board.id}/open`, { path: "/list?x=1" }, host)).json.url;
+		const tailnetUrl = `https://crumb-${board.id}.siren-macaroni.ts.net/list?x=1`;
+		assert.equal(await open("hamstr.siren-macaroni.ts.net:8000"), tailnetUrl, "a MagicDNS name");
+		assert.equal(await open("100.97.234.108:8000"), tailnetUrl, "a Tailscale address");
+		// Anything else keeps the LAN address (a port or a name, per Settings → Addresses).
+		assert.match(await open("100.128.0.1:8000"), /^http:\/\/(?!crumb-.*\.ts\.net)/, "outside 100.64.0.0/10");
+		assert.match(await open("hamstr.other.ts.net:8000"), /^http:\/\//, "another tailnet");
+		assert.match(await open(SHELL), /^http:\/\//, "the LAN name");
+		const shellPage = await shell.request("GET", `/c/${board.id}/open`, { host: "hamstr.siren-macaroni.ts.net:8000" });
+		assert.equal(shellPage.headers.location, `https://crumb-${board.id}.siren-macaroni.ts.net/`);
+	});
+
 	it("links back to the shell by its address, not by the crumb's name", () => {
 		const c = hamstr.core;
 		assert.equal(c.homeShellHost(`crumb-${board.id}.10-0-0-7.sslip.io:8000`), "10.0.0.7");
 		assert.equal(c.homeShellHost(`crumb-${board.id}.10-0-0-7.nip.io`), "10.0.0.7");
 		assert.equal(c.homeShellHost("homeassistant.local:8000"), "homeassistant.local");
+		assert.equal(c.homeShellHost(`crumb-${board.id}.siren-macaroni.ts.net`), "hamstr.siren-macaroni.ts.net", "a tailnet crumb: the shell's tailnet name");
+	});
+
+	it("takes the shell's own https origin behind tailscale serve, and no other", async () => {
+		const post = (host: string, origin: string) =>
+			shell.request("PUT", "/api/admin/home-network", { host, headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ names: "off", address: "" }) });
+		assert.equal((await post("hamstr.siren-macaroni.ts.net", "https://hamstr.siren-macaroni.ts.net")).status, 200);
+		assert.equal((await post("hamstr.siren-macaroni.ts.net", "https://evil.example")).status, 403);
+		assert.equal((await post("homeassistant.local:8000", "https://homeassistant.local:8000")).status, 403, "https only on the tailnet");
 	});
 
 	it("takes only plain unicast addresses", async () => {

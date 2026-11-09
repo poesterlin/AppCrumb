@@ -34,6 +34,9 @@ FROM versity/versitygw:v1.10.0 AS s3
 FROM caddy:2.10-alpine AS caddy
 FROM goacme/lego:v5.6.0 AS lego
 FROM node:24-bookworm-slim AS node
+# Home mode can put Hamstr on a tailnet (Settings → Addresses → Tailscale):
+# tailscaled in userspace mode, as the celld user, logged out until then.
+FROM tailscale/tailscale:v1.104.4 AS tailscale
 
 FROM ghcr.io/denoland/celld:v0.6.3
 RUN apt-get update \
@@ -46,6 +49,7 @@ COPY --from=caddy /usr/bin/caddy /usr/local/bin/caddy
 COPY --from=lego /lego /usr/local/bin/lego
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=esbuild /out/esbuild /usr/local/bin/esbuild
+COPY --from=tailscale /usr/local/bin/tailscale /usr/local/bin/tailscaled /usr/local/bin/
 COPY --from=hamstr /src/hamstr/build /app/hamstr/build
 COPY --from=hamstr /src/hamstr/lib /app/hamstr/lib
 COPY --from=hamstr /src/hamstr/server.ts /src/hamstr/package.json /app/hamstr/

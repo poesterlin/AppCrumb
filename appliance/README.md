@@ -99,6 +99,16 @@ one) restarts the container, since Hamstr was started for the old one.
   Off by default; with it on, no crumb ports are used.
 - Publish the crumb ports, or use the host's network (`--network host`, which
   the Home Assistant add-on does).
+- Optionally, Tailscale (Settings → Addresses → Tailscale): paste an OAuth
+  client (Auth Keys and Services, write) and Hamstr joins your tailnet as its
+  own machine through the bundled `tailscaled` (userspace networking, state in
+  `/data/tailscale`, idle and logged out until then). The shell gets
+  `https://hamstr.<tailnet>.ts.net` and each crumb a Tailscale Service,
+  `https://crumb-<id>.<tailnet>.ts.net`, both with Tailscale's certificates.
+  Browsers that reach Hamstr over the tailnet get those links; LAN visitors keep
+  ports or names. Turning it off removes the services and the machine.
+  `HAMSTR_TAILSCALE=off` does not start `tailscaled`; `HAMSTR_TAILNET_HOSTNAME`
+  picks the machine name (default `hamstr`). See `hamstr/docs/tailnet-services.md`.
 
 ### The Home Assistant panel
 

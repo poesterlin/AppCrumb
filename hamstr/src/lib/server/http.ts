@@ -79,8 +79,11 @@ export function sameOrigin(event, core) {
 	if (site !== null) return site === "same-origin";
 	const origin = event.request.headers.get("origin");
 	// Home mode answers on whatever host the browser uses.
-	const shell = core.home ? `${core.config.scheme}://${event.request.headers.get("host")}` : core.shellOrigin;
-	return origin === null || origin === shell;
+	const host = event.request.headers.get("host");
+	const shell = core.home ? `${core.config.scheme}://${host}` : core.shellOrigin;
+	// Home mode behind `tailscale serve`: the browser is on https, Hamstr sees plain http.
+	const tailnet = core.home && core.onTailnet(String(host ?? "").replace(/:\d+$/, "")) ? `https://${host}` : null;
+	return origin === null || origin === shell || origin === tailnet;
 }
 
 async function readBody(request, limit = 64 * 1024) {

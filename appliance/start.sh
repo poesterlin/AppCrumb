@@ -56,7 +56,7 @@ pids=()
 stop() {
 	log "stopping"
 	# Front first, the store last: celld drains (about 15 s) and still writes.
-	for name in caddy agent hamstr celld s3; do
+	for name in caddy agent hamstr tailscaled celld s3; do
 		eval "pid=\${pid_$name:-}"
 		[ -n "$pid" ] || continue
 		t0=$SECONDS
@@ -137,8 +137,23 @@ until curl -fsS -o /dev/null "http://127.0.0.1:$CELLD_PORT/.well-known/celld/hea
 done
 log "celld is up"
 
+# --- Tailscale (home mode) ---------------------------------------------------
+# Logged out and idle until an admin connects a tailnet in Settings → Addresses;
+# then Hamstr logs it in and serves the shell and each crumb through it.
+# Userspace networking: no TUN device, no root, nothing changes on the host.
+# Its state (the machine's key, certificates) lives in /data/tailscale.
+TAILSCALE_SOCKET=
+if [ "$HAMSTR_AUTH" = none ] && [ "${HAMSTR_TAILSCALE:-on}" != off ]; then
+	mkdir -p /data/tailscale
+	TAILSCALE_SOCKET=/tmp/tailscaled.sock
+	tailscaled --tun=userspace-networking --statedir=/data/tailscale --socket="$TAILSCALE_SOCKET" \
+		--port=0 --no-logs-no-support --verbose="${TAILSCALE_VERBOSE:--1}" &
+	pid_tailscaled=$!; pids+=("$pid_tailscaled")
+fi
+
 # --- Hamstr, Caddy, renewals ------------------------------------------------------
 (cd /app && PORT=$HAMSTR_PORT HOST=127.0.0.1 HAMSTR_DATA=/data/hamstr \
+	HAMSTR_TAILSCALE_SOCKET="$TAILSCALE_SOCKET" \
 	CELLD_ADMIN_API="http://127.0.0.1:$CELLD_PORT" \
 	exec node hamstr/server.ts) &
 pid_hamstr=$!; pids+=("$pid_hamstr")

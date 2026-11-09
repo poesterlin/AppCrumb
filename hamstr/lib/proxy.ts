@@ -14,6 +14,8 @@ const text = (status, body) => new Response(body, { status, headers: { "content-
 function shellOriginFor(core, event) {
 	if (!core.home) return core.shellOrigin;
 	const hostname = core.homeShellHost(event.locals.browserHost);
+	// The shell's Tailscale name is HTTPS on 443: no port.
+	if (core.tailnetShell && hostname === core.tailnetShell) return `https://${hostname}`;
 	return `http://${hostname}${core.config.publicPort ? `:${core.config.publicPort}` : ""}`;
 }
 

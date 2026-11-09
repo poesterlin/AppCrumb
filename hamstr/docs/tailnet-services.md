@@ -5,9 +5,32 @@ Tailscale's certificate and no DNS or port setup. It does what
 [DockTail](https://github.com/marvinvr/docktail) does for containers, with crumb
 ids from `hamstr.db` as the input.
 
-**Status:** prototype. Unit-tested against a fake control plane and a fake
-`tailscale` CLI only. Nothing here has talked to a real tailnet, and the
-reconciler is not wired into the running server.
+**Status:** wired into Hamstr (home mode) as Settings → Addresses → Tailscale
+(`src/lib/server/tailnet.ts`). Verified on a real tailnet (2026-11-09, appliance,
+tailscale v1.104.4): connect → shell on `https://<machine>.<tailnet>.ts.net`,
+a crumb's service a few seconds after it is made, removed on trash, back on
+restore, kept across a restart; Turn off removed the services and the machine.
+The first request to a new name waits for its certificate (about 30-40 s).
+
+### Built in (appliance)
+
+The appliance runs `tailscaled --tun=userspace-networking` as its unprivileged
+user (socket `/tmp/tailscaled.sock`, state `/data/tailscale`, log upload off),
+logged out until an admin connects. Hamstr gets the socket as
+`HAMSTR_TAILSCALE_SOCKET`; without it the option is shown as unavailable.
+On Connect it checks the OAuth client's scopes (`auth_keys`, `services`), logs
+the machine in with the client secret as a tagged, preauthorized auth key (from
+a 0600 file, `--auth-key=file:`, never argv), serves the shell with
+`tailscale serve --bg --https=443 http://127.0.0.1:<hamstr port>`, then
+reconciles every 60 s and half a second after a crumb is made, trashed,
+restored or deleted. The secret is stored in `hamstr.db` (like OIDC client
+secrets) and never returned by the API. Defaults: machine tags
+`tag:server,tag:container`, service tag `tag:container` (the OAuth client on
+siren-macaroni refused `tag:server` alone).
+
+The rest of this page describes the reconciler and the standalone
+`tools/tailnet-sync.ts`, which still works for a tailscaled run elsewhere
+(`HAMSTR_TAILNET_DOMAIN` / `HAMSTR_TAILNET_SHELL`).
 
 ## Pieces
 

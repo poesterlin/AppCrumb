@@ -13,6 +13,7 @@ import { AuthError, createCore as createAccounts } from "../../../lib/auth/core.
 import { safePath } from "../../../lib/path.ts";
 import { siteOf } from "../../../lib/site.ts";
 import { createStores, ensureStores } from "../../../lib/stores.ts";
+import { createTailnet, type TailnetOptions } from "./tailnet.ts";
 
 export { AuthError, CelldError, ManifestError, BundleError, safePath };
 
@@ -124,6 +125,14 @@ export interface CoreOptions {
 	/** Home mode: a tailnet's MagicDNS name (siren-macaroni.ts.net). Crumbs also
 	 *  answer on crumb-<id>.<this>, served by Tailscale Services (docs/tailnet-services.md). */
 	tailnetDomain?: string;
+	/** Home mode: the shell's own HTTPS name on that tailnet (hamstr.siren-macaroni.ts.net,
+	 *  served by `tailscale serve --https=443`). Crumbs link back to it, so nobody sees a port. */
+	tailnetShell?: string;
+	/** Home mode: tailscaled's socket (HAMSTR_TAILSCALE_SOCKET). Set, Settings → Addresses offers
+	 *  Tailscale: Hamstr joins the tailnet with an OAuth client and makes the services itself. */
+	tailscaleSocket?: string;
+	/** Tests: replaces parts of the tailnet manager (its CLI runner, fetch). */
+	tailnet?: Partial<TailnetOptions>;
 	sitesApi?: string;
 	logging?: boolean;
 }
@@ -169,12 +178,20 @@ export function createCore(options: CoreOptions = {}) {
 		homeNames: String(options.homeNames ?? env.HAMSTR_HOME_NAMES ?? "off").toLowerCase(),
 		homeAddress: String(options.homeAddress ?? env.HAMSTR_HOME_ADDRESS ?? ""),
 		tailnetDomain: String(options.tailnetDomain ?? env.HAMSTR_TAILNET_DOMAIN ?? "").toLowerCase().replace(/^\.+|\.+$/g, ""),
+		tailnetShell: String(options.tailnetShell ?? env.HAMSTR_TAILNET_SHELL ?? "").toLowerCase().replace(/^\.+|\.+$/g, ""),
+		tailscaleSocket: String(options.tailscaleSocket ?? env.HAMSTR_TAILSCALE_SOCKET ?? ""),
+		tailscaleCli: env.HAMSTR_TAILSCALE_CLI || "tailscale",
+		tailnetHostname: env.HAMSTR_TAILNET_HOSTNAME || "hamstr",
+		tailnetUpstream: env.HAMSTR_TAILNET_UPSTREAM || "",
 		logging: options.logging !== false,
 	};
 	if (!["required", "none"].includes(config.auth)) throw new Error('HAMSTR_AUTH must be "required" or "none"');
 	const home = config.auth === "none";
 	if (!["off", "sslip.io", "nip.io"].includes(config.homeNames)) throw new Error('HAMSTR_HOME_NAMES must be "off", "sslip.io" or "nip.io"');
 	if (config.tailnetDomain && !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/.test(config.tailnetDomain)) throw new Error("HAMSTR_TAILNET_DOMAIN must be a tailnet name like siren-macaroni.ts.net");
+	if (config.tailnetShell && !(config.tailnetDomain && /^[a-z0-9-]+$/.test(config.tailnetShell.slice(0, -(config.tailnetDomain.length + 1))) && config.tailnetShell.endsWith(`.${config.tailnetDomain}`))) {
+		throw new Error("HAMSTR_TAILNET_SHELL must be a name under HAMSTR_TAILNET_DOMAIN, like hamstr.siren-macaroni.ts.net");
+	}
 	if (config.homeAddress && !ipv4(config.homeAddress)) throw new Error("HAMSTR_HOME_ADDRESS must be an IPv4 address like 192.168.1.5");
 	const portRange = /^(\d+)-(\d+)$/.exec(config.crumbPorts);
 	if (!portRange || Number(portRange[1]) < 1024 || Number(portRange[2]) > 65535 || Number(portRange[1]) > Number(portRange[2])) {
@@ -204,10 +221,24 @@ export function createCore(options: CoreOptions = {}) {
 	let homeNet = { names: config.homeNames, address: config.homeAddress };
 	let homePatternFor = "";
 	let homePattern = null;
+	// The tailnet: the machine Hamstr runs itself (Settings → Addresses → Tailscale),
+	// else HAMSTR_TAILNET_DOMAIN / _SHELL for a tailscaled someone else runs.
+	let tailnet: ReturnType<typeof createTailnet> | null = null;
+	const tailnetDomain = () => tailnet?.domain || config.tailnetDomain;
+	const tailnetShell = () => (tailnet?.domain ? tailnet.shell : config.tailnetShell);
+	let tailnetPatternFor = "";
+	let tailnetPatternCache = null;
+	const tailnetPattern = () => {
+		const domain = tailnetDomain();
+		if (domain !== tailnetPatternFor) {
+			tailnetPatternFor = domain;
+			tailnetPatternCache = domain ? new RegExp(`^${config.crumbPrefix}([a-z0-9]{12})\\.${domain.replace(/[.]/g, "\\.")}$`) : null;
+		}
+		return tailnetPatternCache;
+	};
 	/** The crumb id in a home-mode name, or null. */
-	const tailnetPattern = config.tailnetDomain ? new RegExp(`^${config.crumbPrefix}([a-z0-9]{12})\\.${config.tailnetDomain.replace(/[.]/g, "\\.")}$`) : null;
 	const homeCrumbId = (host) => {
-		const viaTailnet = home && tailnetPattern ? tailnetPattern.exec(host) : null;
+		const viaTailnet = home ? tailnetPattern()?.exec(host) : null;
 		if (viaTailnet) return viaTailnet[1];
 		if (!home || homeNet.names === "off") return null;
 		if (homePatternFor !== homeNet.names) {
@@ -217,13 +248,23 @@ export function createCore(options: CoreOptions = {}) {
 		const m = homePattern.exec(host);
 		return m && ipv4(m[2].replace(/-/g, ".")) ? m[1] : null;
 	};
+	/** Whether the browser reached the shell over the configured tailnet: one of its
+	 *  MagicDNS names, or a Tailscale address (100.64.0.0/10). */
+	const onTailnet = (hostname) => {
+		const domain = tailnetDomain();
+		if (!domain) return false;
+		const host = String(hostname).toLowerCase();
+		if (host.endsWith(`.${domain}`)) return true;
+		const octets = ipv4(host) ? host.split(".").map(Number) : null;
+		return !!octets && octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127;
+	};
 	/** The host of the shell, for a browser that reached a crumb by one of the home-mode names:
 	 *  the address inside an sslip.io/nip.io name, else the configured address, else the host itself. */
 	const homeShellHost = (hostWithPort) => {
 		const host = String(hostWithPort ?? "").toLowerCase().replace(/:\d+$/, "");
 		const named = /^[a-z0-9-]+\.(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})\.(?:sslip|nip)\.io$/.exec(host);
 		if (named && ipv4(named[1].replace(/-/g, "."))) return named[1].replace(/-/g, ".");
-		if (tailnetPattern?.test(host)) return homeNet.address || config.homeAddress || host;
+		if (tailnetPattern()?.test(host)) return tailnetShell() || homeNet.address || config.homeAddress || host;
 		return host;
 	};
 	const SHELL_COOKIE = secure ? "__Host-hamstr" : "hamstr";
@@ -314,9 +355,7 @@ export function createCore(options: CoreOptions = {}) {
 	/** `host` is the Host header of the request: a page the browser reached through a name an
 	 *  attacker controls (DNS rebinding) must not change where every crumb opens. */
 	function setHomeNetwork(input, host = "") {
-		const hostname = String(host).toLowerCase().replace(/:\d+$/, "");
-		if (host && !trustedHost(hostname)) throw new HttpError(403, "Open Hamstr by its IP address (or a .local or tailnet name) to change this.");
-		if (!home) throw new HttpError(409, "Crumbs are addressed by hostname when sign-in is on; this is for home mode.");
+		requireHomeSettingsHost(host);
 		const names = String(input?.names ?? "off").toLowerCase();
 		const address = String(input?.address ?? "").trim();
 		if (!["off", "sslip.io", "nip.io"].includes(names)) throw new HttpError(400, "Pick ports, sslip.io or nip.io.");
@@ -325,6 +364,28 @@ export function createCore(options: CoreOptions = {}) {
 		db.prepare("INSERT INTO settings (key, value) VALUES ('home_network', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(homeNet));
 		return homeNetwork();
 	}
+	/** Settings that change where every crumb opens: not from a page reached through a
+	 *  name someone else controls (DNS rebinding), and only in home mode. */
+	function requireHomeSettingsHost(host = "") {
+		const hostname = String(host).toLowerCase().replace(/:\d+$/, "");
+		if (host && !trustedHost(hostname)) throw new HttpError(403, "Open Hamstr by its IP address (or a .local or tailnet name) to change this.");
+		if (!home) throw new HttpError(409, "Crumbs are addressed by hostname when sign-in is on; this is for home mode.");
+	}
+	if (home) {
+		tailnet = createTailnet({
+			db,
+			socket: config.tailscaleSocket,
+			cli: config.tailscaleCli,
+			upstream: config.tailnetUpstream || `http://127.0.0.1:${config.port}`,
+			hostname: config.tailnetHostname,
+			tmpDir,
+			crumbs: () => db.prepare("SELECT id FROM crumbs WHERE trashed_at IS NULL").all() as { id: string }[],
+			error: (status, message) => new HttpError(status, message),
+			...options.tailnet,
+		});
+	}
+	/** A crumb was made, trashed, restored or deleted. */
+	const crumbsChanged = () => tailnet?.poke();
 	// Share links were removed: drop their tables and columns from databases that
 	// still have them (new databases never create them). Tickets are short-lived,
 	// so dropping share_id from them and from crumb_sessions loses nothing.
@@ -716,6 +777,7 @@ export function createCore(options: CoreOptions = {}) {
 			await celld.deleteSite(host).catch(() => {});
 			throw err;
 		}
+		crumbsChanged();
 		return q.crumb.get(id);
 	}
 
@@ -904,6 +966,7 @@ export function createCore(options: CoreOptions = {}) {
 			if (other) throw new HttpError(409, `${app.name} is one per person, and you already have a live one; delete or trash that one first`);
 		}
 		db.prepare("UPDATE crumbs SET trashed_at = NULL WHERE id = ?").run(crumb.id);
+		crumbsChanged();
 	}
 
 	async function purgeCrumb(crumb) {
@@ -913,6 +976,7 @@ export function createCore(options: CoreOptions = {}) {
 		await celld.deleteSite(crumbHost(crumb.id));
 		db.prepare("DELETE FROM crumbs WHERE id = ?").run(crumb.id);
 		portHooks.close(crumb.id);
+		crumbsChanged();
 	}
 
 	/** What uninstalling an app would delete, as seen by `user`. */
@@ -973,6 +1037,10 @@ export function createCore(options: CoreOptions = {}) {
 		if (home) {
 			db.prepare("UPDATE crumbs SET opened_at = ? WHERE id = ?").run(now(), crumb.id);
 			const hostname = String(host).replace(/:\d+$/, "") || "localhost";
+			// Reached over the tailnet: the crumb's own Tailscale Service name, with
+			// Tailscale's certificate. LAN visitors keep ports or names (they cannot
+			// resolve *.ts.net); the reconciler (tools/tailnet-sync.ts) makes the service.
+			if (onTailnet(hostname)) return `https://${config.crumbPrefix}${crumb.id}.${tailnetDomain()}${safePath(path)}`;
 			const address = ipv4(hostname) ? hostname : homeNet.address;
 			if (homeNet.names !== "off" && address) {
 				const port = /:\d+$/.exec(String(host))?.[0] ?? "";
@@ -1077,7 +1145,17 @@ export function createCore(options: CoreOptions = {}) {
 		crumbPattern,
 		homeCrumbId,
 		homeShellHost,
-		tailnetDomain: config.tailnetDomain,
+		get tailnetDomain() {
+			return tailnetDomain();
+		},
+		get tailnetShell() {
+			return tailnetShell();
+		},
+		/** Home mode: Settings → Addresses → Tailscale; null otherwise. */
+		tailnet,
+		crumbsChanged,
+		requireHomeSettingsHost,
+		onTailnet,
 		homeNetwork,
 		setHomeNetwork,
 		// Home mode: crumbs are other ports of whatever host the browser uses.
@@ -1137,6 +1215,7 @@ export function createCore(options: CoreOptions = {}) {
 		ensureCrumbSites,
 		close() {
 			clearInterval(timer);
+			tailnet?.close();
 			for (const t of deferred) clearTimeout(t);
 			db.close();
 			accounts.db.close();

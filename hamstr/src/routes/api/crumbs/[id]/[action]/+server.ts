@@ -20,6 +20,7 @@ export const POST = guard(async (event) => {
 	if (action === "trash") {
 		c.db.prepare("UPDATE crumbs SET trashed_at = ? WHERE id = ? AND trashed_at IS NULL").run(c.now(), crumb.id);
 		c.db.prepare("DELETE FROM crumb_sessions WHERE crumb_id = ?").run(crumb.id);
+		c.crumbsChanged();
 		return json(c, 200, { ok: true });
 	}
 	if (action === "restore") {
